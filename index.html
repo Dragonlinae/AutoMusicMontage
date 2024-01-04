@@ -59,13 +59,17 @@
                     <label for="beatSepSlider">Minimum Peaks Hit for Significance</label>
                 </div>
                 <div class="slider">
-                    <input type="range" min="0" max="5" value="0.1" step="0.1" class="slider" id="beatSepSlider"
-                        oninput="beatSepChange(this.value)" onchange="beatSepChange(this.value)">
-                    <input type="number" id="beatSepSliderInput" min="0" max="5" value="0.1" step="0.1"
-                        onchange="beatSepChange(this.value)">
+                    <input type="range" min="0" max="10" value="0.1" step="0.1" class="slider" id="beatSepSlider"
+                        oninput="beatSepChange(0,this.value)" onchange="beatSepChange(0,this.value)">
+                    <input type="range" min="0" max="10" value="5" step="0.1" class="slider" id="beatSepSlider2"
+                        oninput="beatSepChange(1,this.value)" onchange="beatSepChange(1,this.value)">
+                    <input type="number" id="beatSepSliderInput" min="0" max="10" value="0.1" step="0.1"
+                        onchange="beatSepChange(0,this.value)">
+                    <input type="number" id="beatSepSliderInput2" min="0" max="10" value="5" step="0.1"
+                        onchange="beatSepChange(1,this.value)">
                 </div>
                 <div class="sliderLabel">
-                    <label for="beatSepSlider">Minimum Beat Separation</label>
+                    <label for="beatSepSlider">Beat Separation</label>
                 </div>
             </div>
             <button id="generate" onclick="generate()">Generate</button>

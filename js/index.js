@@ -1,7 +1,8 @@
 var bandpassLowerFrequency = 1;
 var bandpassUpperFrequency = 100;
 var threshold = 0.5;
-var beatSeparation = 0.1;
+var beatSeparationLower = 0.1;
+var beatSeparationUpper = 5;
 var beatSignificanceCount = 1000;
 const timeslice = 300;
 var isGenerated = false;
@@ -73,10 +74,32 @@ function thresholdChange(value) {
     document.getElementById("thresholdSliderInput").value = value;
 }
 
-function beatSepChange(value) {
-    beatSeparation = value;
-    document.getElementById("beatSepSlider").value = value;
-    document.getElementById("beatSepSliderInput").value = value;
+function beatSepChange(isUpper, value) {
+    var leftSlider = document.getElementById("beatSepSlider");
+    var rightSlider = document.getElementById("beatSepSlider2");
+    var leftSliderInput = document.getElementById("beatSepSliderInput");
+    var rightSliderInput = document.getElementById("beatSepSliderInput2");
+    value = Math.round(value * 10) / 10;
+    if (isUpper) {
+        if (value <= beatSeparationLower) {
+            value = beatSeparationLower + 0.1;
+            value = Math.round(value * 10) / 10;
+        }
+        beatSeparationUpper = value;
+        rightSlider.value = value;
+        rightSliderInput.value = value;
+    } else {
+        if (value >= beatSeparationUpper) {
+            value = beatSeparationUpper - 0.1;
+            value = Math.round(value * 10) / 10;
+        }
+        if (value < 0) {
+            value = 0;
+        }
+        beatSeparationLower = value;
+        leftSlider.value = value;
+        leftSliderInput.value = value;
+    }
 }
 
 function beatSigChange(value) {
@@ -126,26 +149,38 @@ function getMusicPeaks(waveform) {
     var lastStrongPeak = 0;
     var lastPeak = 0
     var groupPeakCount = 0;
+    var lastRecordedPeak = -1;
 
     for (let i = 0; i < waveform.length; i++) {
         if (Math.abs(waveform[i]) > threshold) {
             peaks[i] = true;
-            if (i - lastStrongPeak > beatSeparation * 44100) {
+            if (i - lastStrongPeak > beatSeparationLower * 44100) {
                 if (groupPeakCount > beatSignificanceCount) {
                     truepeaks[lastStrongPeak] = true;
                     sigBeatFlash[Math.round(lastStrongPeak * 10 / 44100)] = true;
                 }
-                lastPeak = i;
+                lastRecordedPeak = lastStrongPeak;
                 lastStrongPeak = i;
+                lastPeak = i;
                 groupPeakCount = 1;
             } else if (Math.abs(waveform[i]) > Math.abs(waveform[lastStrongPeak])) {
                 lastStrongPeak = i;
-                lastPeak = i;
                 groupPeakCount += 1;
             } else {
-                lastPeak = i;
                 groupPeakCount += 1;
             }
+        }
+        if (i - lastRecordedPeak > beatSeparationUpper * 44100) {
+            console.log("lastPeak: " + lastPeak);
+            truepeaks[lastPeak] = true;
+            sigBeatFlash[Math.round(lastPeak * 10 / 44100)] = true;
+            lastRecordedPeak = lastPeak;
+            lastStrongPeak = i;
+            lastPeak = i;
+            groupPeakCount = 1;
+        }
+        if (Math.abs(waveform[i]) > Math.abs(waveform[lastPeak])) {
+            lastPeak = i;
         }
     }
     if (groupPeakCount > beatSignificanceCount) {
@@ -276,22 +311,23 @@ async function graphWaveform(waveform, bandpassWaveform, peaks, truepeaks) {
             }
             if (peaks[Math.round(i * timeslice + j)]) {
                 isPeak = true;
-                if (truepeaks[Math.round(i * timeslice + j)]) {
-                    isTruePeak = true;
-                }
+            }
+            if (truepeaks[Math.round(i * timeslice + j)]) {
+                isTruePeak = true;
             }
         }
         // if (i > 50000 && i < 50100) {
         //     console.log(y);
         // }
+
+        if (isTruePeak) {
+            bandpassCanvasContext.fillStyle = "#00ff00";
+            bandpassCanvasContext.fillRect(x, 0, 1, bandpassCanvas.height);
+            canvasContext.fillStyle = "#00ff00";
+            canvasContext.fillRect(x, 0, 1, canvas.height);
+        }
         bandpassCanvasContext.fillStyle = "#ffffff";
         if (isPeak) {
-            if (isTruePeak) {
-                bandpassCanvasContext.fillStyle = "#00ff00";
-                bandpassCanvasContext.fillRect(x, 0, 1, bandpassCanvas.height);
-                canvasContext.fillStyle = "#00ff00";
-                canvasContext.fillRect(x, 0, 1, canvas.height);
-            }
             bandpassCanvasContext.fillStyle = "#ff0000";
         }
         bandpassCanvasContext.fillRect(x, bandpassCanvas.height / 2 + ylow, 1, yhigh - ylow);
