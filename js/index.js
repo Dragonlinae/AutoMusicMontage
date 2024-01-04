@@ -10,6 +10,7 @@ var timePrev = 0;
 var sigBeatFlash = null;
 var loadedBuffer = null;
 var loadedSong = null;
+var sampleRate = sampleRate;
 
 window.onload = function () {
     const canvasContainer = document.getElementById("outputMusicCanvasContainer");
@@ -22,7 +23,7 @@ window.onload = function () {
         timePrev = document.getElementById("outputMusic").currentTime;
         timeGap = Math.min(Math.abs(timeGap), 0.5);
         canvasContainer.style.transition = "left " + timeGap + "s linear";
-        canvasContainer.style.left = -document.getElementById("outputMusic").currentTime * 44100 / timeslice + "px";
+        canvasContainer.style.left = -document.getElementById("outputMusic").currentTime * sampleRate / timeslice + "px";
         if (sigBeatFlash[Math.round(document.getElementById("outputMusic").currentTime * 10)]) {
             console.log("flash");
             document.getElementById("outputMusic").style.backgroundColor = "#ff0000";
@@ -37,7 +38,7 @@ window.onload = function () {
     //     timePrev = document.getElementById("outputMusic").currentTime;
     //     timeGap = Math.min(Math.abs(timeGap), 0.5);
     //     canvasContainer.style.transition = "left " + timeGap + "s linear";
-    //     canvasContainer.style.left = -document.getElementById("outputMusic").currentTime * 44100 / timeslice + "px";
+    //     canvasContainer.style.left = -document.getElementById("outputMusic").currentTime * sampleRate / timeslice + "px";
     // }
 }
 
@@ -127,6 +128,7 @@ async function generate() {
         const musicBuffer = await getMusicBuffer(musicFile);
         loadedSong = musicFile.name;
         loadedBuffer = musicBuffer;
+        sampleRate = musicBuffer.sampleRate;
     }
     console.log("Getting bandpass buffer");
     const bandpassMusicBuffer = await bandpassFilter(loadedBuffer);
@@ -144,7 +146,7 @@ async function generate() {
 function getMusicPeaks(waveform) {
     var peaks = new Array(waveform.length).fill(false);
     var truepeaks = new Array(waveform.length).fill(false);
-    sigBeatFlash = new Array(Math.round(waveform.length / 44100 * 10)).fill(false);
+    sigBeatFlash = new Array(Math.round(waveform.length / sampleRate * 10)).fill(false);
 
     var lastStrongPeak = 0;
     var lastPeak = 0
@@ -154,10 +156,10 @@ function getMusicPeaks(waveform) {
     for (let i = 0; i < waveform.length; i++) {
         if (Math.abs(waveform[i]) > threshold) {
             peaks[i] = true;
-            if (i - lastStrongPeak > beatSeparationLower * 44100) {
+            if (i - lastStrongPeak > beatSeparationLower * sampleRate) {
                 if (groupPeakCount > beatSignificanceCount) {
                     truepeaks[lastStrongPeak] = true;
-                    sigBeatFlash[Math.round(lastStrongPeak * 10 / 44100)] = true;
+                    sigBeatFlash[Math.round(lastStrongPeak * 10 / sampleRate)] = true;
                 }
                 lastRecordedPeak = lastStrongPeak;
                 lastStrongPeak = i;
@@ -170,11 +172,16 @@ function getMusicPeaks(waveform) {
                 groupPeakCount += 1;
             }
         }
-        if (i - lastRecordedPeak > beatSeparationUpper * 44100) {
+        if (i - lastRecordedPeak > beatSeparationUpper * sampleRate) {
             console.log("lastPeak: " + lastPeak);
             truepeaks[lastPeak] = true;
-            sigBeatFlash[Math.round(lastPeak * 10 / 44100)] = true;
+            sigBeatFlash[Math.round(lastPeak * 10 / sampleRate)] = true;
             lastRecordedPeak = lastPeak;
+            for (; i + 1 < waveform.length && i < lastPeak + beatSeparationLower * sampleRate; i++) {
+                if (Math.abs(waveform[i]) > threshold) {
+                    peaks[i] = true;
+                }
+            }
             lastStrongPeak = i;
             lastPeak = i;
             groupPeakCount = 1;
@@ -185,7 +192,7 @@ function getMusicPeaks(waveform) {
     }
     if (groupPeakCount > beatSignificanceCount) {
         truepeaks[lastStrongPeak] = true;
-        sigBeatFlash[Math.round(lastStrongPeak * 10 / 44100)] = true;
+        sigBeatFlash[Math.round(lastStrongPeak * 10 / sampleRate)] = true;
     }
     return { peaks, truepeaks };
 }
@@ -197,10 +204,10 @@ function getMusicPeaks(waveform) {
 //     var lastPeak = lastStrongPeak
 //     var groupPeakCount = 0;
 //     for (let peak of peaks) {
-//         if (peak - lastStrongPeak > beatSeparation * 44100) {
+//         if (peak - lastStrongPeak > beatSeparation * sampleRate) {
 //             if (groupPeakCount > beatSignificanceCount) {
 //                 truepeaks.add(lastStrongPeak);
-//                 sigBeatFlash.add(Math.round(lastStrongPeak * 10 / 44100));
+//                 sigBeatFlash.add(Math.round(lastStrongPeak * 10 / sampleRate));
 //             }
 //             lastPeak = peak;
 //             lastStrongPeak = peak;
@@ -215,7 +222,7 @@ function getMusicPeaks(waveform) {
 //         }
 //     }
 //     truepeaks.add(lastStrongPeak);
-//     sigBeatFlash.add(Math.round(lastStrongPeak * 10 / 44100));
+//     sigBeatFlash.add(Math.round(lastStrongPeak * 10 / sampleRate));
 //     return truepeaks;
 // }
 
