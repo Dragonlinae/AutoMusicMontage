@@ -1,8 +1,11 @@
 var lowpassFrequency = 1000;
 var threshold = 0.7
-const timeslice = 100;
+var beatSeparation = 0.2;
+var beatSignificanceCount = 1000;
+const timeslice = 300;
 var isGenerated = false;
 var timePrev = 0;
+var sigBeatFlash = new Set();
 
 window.onload = function () {
     const canvasContainer = document.getElementById("outputMusicCanvasContainer");
@@ -16,6 +19,13 @@ window.onload = function () {
         timeGap = Math.min(Math.abs(timeGap), 0.5);
         canvasContainer.style.transition = "left " + timeGap + "s linear";
         canvasContainer.style.left = -document.getElementById("outputMusic").currentTime * 44100 / timeslice + "px";
+        if (sigBeatFlash.has(Math.round(document.getElementById("outputMusic").currentTime * 10))) {
+            console.log("flash");
+            document.getElementById("outputMusic").style.backgroundColor = "#ff0000";
+            setTimeout(function () {
+                document.getElementById("outputMusic").style.backgroundColor = "#000000";
+            }, 100);
+        }
     }, 100);
     // document.getElementById("outputMusic").ontimeupdate = function () {
     //     console.log(document.getElementById("outputMusic").currentTime);
@@ -46,8 +56,35 @@ function thresholdUpdate(value) {
 }
 
 function thresholdChange(value) {
+    threshold = value;
     document.getElementById("thresholdSlider").value = value;
     document.getElementById("thresholdSliderInput").value = value;
+    if (isGenerated) {
+        generate();
+    }
+}
+
+function beatSepUpdate(value) {
+    document.getElementById("beatSepSliderInput").value = value;
+}
+
+function beatSepChange(value) {
+    beatSeparation = value;
+    document.getElementById("beatSepSlider").value = value;
+    document.getElementById("beatSepSliderInput").value = value;
+    if (isGenerated) {
+        generate();
+    }
+}
+
+function beatSigUpdate(value) {
+    document.getElementById("beatSigSliderInput").value = value;
+}
+
+function beatSigChange(value) {
+    beatSignificanceCount = value;
+    document.getElementById("beatSigSlider").value = value;
+    document.getElementById("beatSigSliderInput").value = value;
     if (isGenerated) {
         generate();
     }
@@ -71,11 +108,49 @@ async function generate() {
     const lowpassMusicBuffer = await lowPassFilter(musicBuffer);
     const waveform = musicBuffer.getChannelData(0);
     const lowpassWaveform = lowpassMusicBuffer.getChannelData(0);
-    await graphWaveform(waveform, lowpassWaveform);
+    const peaks = getMusicPeaks(lowpassWaveform);
+    const truepeaks = filterMusicPeaks(lowpassWaveform, peaks);
+    await graphWaveform(waveform, lowpassWaveform, peaks, truepeaks);
     isGenerated = true;
 }
 
 function getMusicPeaks(waveform) {
+    var peaks = new Set();
+    for (let i = 0; i < waveform.length; i++) {
+        if (Math.abs(waveform[i]) > threshold) {
+            peaks.add(i);
+        }
+    }
+    return peaks;
+}
+
+function filterMusicPeaks(waveform, peaks) {
+    sigBeatFlash.clear();
+    var truepeaks = new Set();
+    var lastStrongPeak = peaks.values().next().value;
+    var lastPeak = lastStrongPeak
+    var groupPeakCount = 0;
+    for (let peak of peaks) {
+        if (peak - lastStrongPeak > beatSeparation * 44100) {
+            if (groupPeakCount > beatSignificanceCount) {
+                truepeaks.add(lastStrongPeak);
+                sigBeatFlash.add(Math.round(lastStrongPeak * 10 / 44100));
+            }
+            lastPeak = peak;
+            lastStrongPeak = peak;
+            groupPeakCount = 1;
+        } else if (Math.abs(waveform[peak]) > Math.abs(waveform[lastStrongPeak])) {
+            lastStrongPeak = peak;
+            lastPeak = peak;
+            groupPeakCount += 1;
+        } else {
+            lastPeak = peak;
+            groupPeakCount += 1;
+        }
+    }
+    truepeaks.add(lastStrongPeak);
+    sigBeatFlash.add(Math.round(lastStrongPeak * 10 / 44100));
+    return truepeaks;
 }
 
 function resizeCanvas(length) {
@@ -124,15 +199,13 @@ function lowPassFilter(buffer) {
 }
 
 
-async function graphWaveform(waveform, lowpassWaveform) {
+async function graphWaveform(waveform, lowpassWaveform, peaks, truepeaks) {
     var maxPCM = 0;
     for (let i = 0; i < waveform.length; i++) {
         if (Math.abs(waveform[i]) > maxPCM) {
             maxPCM = Math.abs(waveform[i]);
         }
     }
-    console.log(maxPCM);
-    console.log(waveform.length);
 
     const canvas = document.getElementById("outputMusicCanvas2");
     const canvasContext = canvas.getContext("2d");
@@ -143,12 +216,60 @@ async function graphWaveform(waveform, lowpassWaveform) {
     canvasContext.fillStyle = "#000000";
     canvasContext.fillRect(0, 0, canvas.width, canvas.height);
 
+    const lowpassCanvas = document.getElementById("outputMusicCanvas");
+    const lowpassCanvasContext = lowpassCanvas.getContext("2d");
+    lowpassCanvasContext.fillStyle = "#000000";
+    lowpassCanvasContext.fillRect(0, 0, lowpassCanvas.width, lowpassCanvas.height);
+    var lowpassMaxPCM = 0;
+    for (let i = 0; i < lowpassWaveform.length; i++) {
+        if (Math.abs(lowpassWaveform[i]) > lowpassMaxPCM) {
+            lowpassMaxPCM = Math.abs(lowpassWaveform[i]);
+        }
+    }
+
+    for (let i = 0; i < lowpassCanvas.width; i++) {
+        const x = i;
+        var ylow = 0;
+        var yhigh = 0;
+        var isPeak = false;
+        var isTruePeak = false;
+        for (let j = 0; j < timeslice; j++) {
+            const y = (lowpassWaveform[Math.round(i * timeslice + j)] / lowpassMaxPCM) * (lowpassCanvas.height / 3);
+            if (y < ylow) {
+                ylow = y;
+            }
+            if (y > yhigh) {
+                yhigh = y;
+            }
+            if (peaks.has(Math.round(i * timeslice + j))) {
+                isPeak = true;
+                if (truepeaks.has(Math.round(i * timeslice + j))) {
+                    isTruePeak = true;
+                }
+            }
+        }
+        // if (i > 50000 && i < 50100) {
+        //     console.log(y);
+        // }
+        lowpassCanvasContext.fillStyle = "#ffffff";
+        if (isPeak) {
+            if (isTruePeak) {
+                lowpassCanvasContext.fillStyle = "#00ff00";
+                lowpassCanvasContext.fillRect(x, 0, 1, lowpassCanvas.height);
+                canvasContext.fillStyle = "#00ff00";
+                canvasContext.fillRect(x, 0, 1, canvas.height);
+            }
+            lowpassCanvasContext.fillStyle = "#ff0000";
+        }
+        lowpassCanvasContext.fillRect(x, lowpassCanvas.height / 2 + ylow, 1, yhigh - ylow);
+    }
+
     for (let i = 0; i < canvas.width; i++) {
         const x = i;
         var ylow = 0;
         var yhigh = 0;
         for (let j = 0; j < timeslice; j++) {
-            const y = (waveform[Math.round(i * timeslice + j)] / maxPCM) * (canvas.height / 2);
+            const y = (waveform[Math.round(i * timeslice + j)] / maxPCM) * (canvas.height / 3);
             if (y < ylow) {
                 ylow = y;
             }
@@ -162,42 +283,4 @@ async function graphWaveform(waveform, lowpassWaveform) {
         canvasContext.fillStyle = "#ffffff";
         canvasContext.fillRect(x, canvas.height / 2 + ylow, 1, yhigh - ylow);
     }
-
-    const lowpassCanvas = document.getElementById("outputMusicCanvas");
-    const lowpassCanvasContext = lowpassCanvas.getContext("2d");
-    lowpassCanvasContext.fillStyle = "#000000";
-    lowpassCanvasContext.fillRect(0, 0, lowpassCanvas.width, lowpassCanvas.height);
-    var maxPCM = 0;
-    for (let i = 0; i < lowpassWaveform.length; i++) {
-        if (Math.abs(lowpassWaveform[i]) > maxPCM) {
-            maxPCM = Math.abs(lowpassWaveform[i]);
-        }
-    }
-    console.log(maxPCM);
-    console.log(lowpassWaveform.length);
-
-    console.log(timeslice);
-
-    for (let i = 0; i < lowpassCanvas.width; i++) {
-        const x = i;
-        var ylow = 0;
-        var yhigh = 0;
-        for (let j = 0; j < timeslice; j++) {
-            const y = (lowpassWaveform[Math.round(i * timeslice + j)] / maxPCM) * (lowpassCanvas.height / 2);
-            if (y < ylow) {
-                ylow = y;
-            }
-            if (y > yhigh) {
-                yhigh = y;
-            }
-        }
-        // if (i > 50000 && i < 50100) {
-        //     console.log(y);
-        // }
-        lowpassCanvasContext.fillStyle = "#ffffff";
-        lowpassCanvasContext.fillRect(x, lowpassCanvas.height / 2 + ylow, 1, yhigh - ylow);
-    }
-    // const peaks = getPeaks([buffer.getChannelData(0), buffer.getChannelData(1)]);
-    // console.log(peaks);
-    // return peaks;
 }
