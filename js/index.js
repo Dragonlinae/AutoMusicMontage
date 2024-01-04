@@ -1,6 +1,7 @@
-var lowpassFrequency = 1000;
-var threshold = 0.7
-var beatSeparation = 0.2;
+var bandpassLowerFrequency = 1;
+var bandpassUpperFrequency = 100;
+var threshold = 0.5;
+var beatSeparation = 0.1;
 var beatSignificanceCount = 1000;
 const timeslice = 300;
 var isGenerated = false;
@@ -26,7 +27,7 @@ window.onload = function () {
             document.getElementById("outputMusic").style.backgroundColor = "#ff0000";
             setTimeout(function () {
                 document.getElementById("outputMusic").style.backgroundColor = "#000000";
-            }, 100);
+            }, 50);
         }
     }, 100);
     // document.getElementById("outputMusic").ontimeupdate = function () {
@@ -39,19 +40,31 @@ window.onload = function () {
     // }
 }
 
-function lowpassFrequencyUpdate(value) {
-    lowpassFrequency = value;
-    document.getElementById("lowpassSliderInput").value = value;
-}
-
-function lowpassFrequencyChange(value) {
-    lowpassFrequency = value;
-    document.getElementById("lowpassSlider").value = value;
-    document.getElementById("lowpassSliderInput").value = value;
-}
-
-function thresholdUpdate(value) {
-    document.getElementById("thresholdSliderInput").value = value;
+function bandpassFrequencyChange(isUpper, value) {
+    var leftSlider = document.getElementById("bandpassSlider");
+    var rightSlider = document.getElementById("bandpassSlider2");
+    var leftSliderInput = document.getElementById("bandpassSliderInput");
+    var rightSliderInput = document.getElementById("bandpassSliderInput2");
+    value = Math.round(value);
+    console.log(value);
+    if (isUpper) {
+        if (value <= bandpassLowerFrequency) {
+            value = bandpassLowerFrequency + 1;
+        }
+        bandpassUpperFrequency = value;
+        rightSlider.value = value;
+        rightSliderInput.value = value;
+    } else {
+        if (value >= bandpassUpperFrequency) {
+            value = bandpassUpperFrequency - 1;
+        }
+        if (value < 1) {
+            value = 1;
+        }
+        bandpassLowerFrequency = value;
+        leftSlider.value = value;
+        leftSliderInput.value = value;
+    }
 }
 
 function thresholdChange(value) {
@@ -60,18 +73,10 @@ function thresholdChange(value) {
     document.getElementById("thresholdSliderInput").value = value;
 }
 
-function beatSepUpdate(value) {
-    document.getElementById("beatSepSliderInput").value = value;
-}
-
 function beatSepChange(value) {
     beatSeparation = value;
     document.getElementById("beatSepSlider").value = value;
     document.getElementById("beatSepSliderInput").value = value;
-}
-
-function beatSigUpdate(value) {
-    document.getElementById("beatSigSliderInput").value = value;
 }
 
 function beatSigChange(value) {
@@ -100,15 +105,15 @@ async function generate() {
         loadedSong = musicFile.name;
         loadedBuffer = musicBuffer;
     }
-    console.log("Getting lowpass buffer");
-    const lowpassMusicBuffer = await lowPassFilter(loadedBuffer);
+    console.log("Getting bandpass buffer");
+    const bandpassMusicBuffer = await bandpassFilter(loadedBuffer);
     console.log("Generating waveform");
     const waveform = loadedBuffer.getChannelData(0);
-    const lowpassWaveform = lowpassMusicBuffer.getChannelData(0);
+    const bandpassWaveform = bandpassMusicBuffer.getChannelData(0);
     console.log("Getting peaks");
-    const { peaks, truepeaks } = getMusicPeaks(waveform);
+    const { peaks, truepeaks } = getMusicPeaks(bandpassWaveform);
     console.log("Graphing waveform");
-    await graphWaveform(waveform, lowpassWaveform, peaks, truepeaks);
+    await graphWaveform(waveform, bandpassWaveform, peaks, truepeaks);
     console.log("Completed");
     isGenerated = true;
 }
@@ -205,13 +210,15 @@ async function getMusicBuffer(musicFile) {
     });
 }
 
-function lowPassFilter(buffer) {
+function bandpassFilter(buffer) {
     const offlineContext = new OfflineAudioContext(1, buffer.length, buffer.sampleRate);
     const source = offlineContext.createBufferSource();
     source.buffer = buffer;
     const filter = offlineContext.createBiquadFilter();
-    filter.type = "lowpass";
-    filter.frequency.value = lowpassFrequency;
+    filter.type = "bandpass";
+    var geometricMean = Math.sqrt(bandpassLowerFrequency * bandpassUpperFrequency);
+    filter.frequency.value = geometricMean;
+    filter.Q.value = geometricMean / (bandpassUpperFrequency - bandpassLowerFrequency);
     source.connect(filter);
     filter.connect(offlineContext.destination);
     source.start(0);
@@ -225,7 +232,7 @@ function lowPassFilter(buffer) {
 }
 
 
-async function graphWaveform(waveform, lowpassWaveform, peaks, truepeaks) {
+async function graphWaveform(waveform, bandpassWaveform, peaks, truepeaks) {
     var maxPCM = 0;
     for (let i = 0; i < waveform.length; i++) {
         if (Math.abs(waveform[i]) > maxPCM) {
@@ -242,25 +249,25 @@ async function graphWaveform(waveform, lowpassWaveform, peaks, truepeaks) {
     canvasContext.fillStyle = "#000000";
     canvasContext.fillRect(0, 0, canvas.width, canvas.height);
 
-    const lowpassCanvas = document.getElementById("outputMusicCanvas");
-    const lowpassCanvasContext = lowpassCanvas.getContext("2d");
-    lowpassCanvasContext.fillStyle = "#000000";
-    lowpassCanvasContext.fillRect(0, 0, lowpassCanvas.width, lowpassCanvas.height);
-    var lowpassMaxPCM = 0;
-    for (let i = 0; i < lowpassWaveform.length; i++) {
-        if (Math.abs(lowpassWaveform[i]) > lowpassMaxPCM) {
-            lowpassMaxPCM = Math.abs(lowpassWaveform[i]);
+    const bandpassCanvas = document.getElementById("outputMusicCanvas");
+    const bandpassCanvasContext = bandpassCanvas.getContext("2d");
+    bandpassCanvasContext.fillStyle = "#000000";
+    bandpassCanvasContext.fillRect(0, 0, bandpassCanvas.width, bandpassCanvas.height);
+    var bandpassMaxPCM = 0;
+    for (let i = 0; i < bandpassWaveform.length; i++) {
+        if (Math.abs(bandpassWaveform[i]) > bandpassMaxPCM) {
+            bandpassMaxPCM = Math.abs(bandpassWaveform[i]);
         }
     }
 
-    for (let i = 0; i < lowpassCanvas.width; i++) {
+    for (let i = 0; i < bandpassCanvas.width; i++) {
         const x = i;
         var ylow = 0;
         var yhigh = 0;
         var isPeak = false;
         var isTruePeak = false;
         for (let j = 0; j < timeslice; j++) {
-            const y = (lowpassWaveform[Math.round(i * timeslice + j)] / lowpassMaxPCM) * (lowpassCanvas.height / 3);
+            const y = (bandpassWaveform[Math.round(i * timeslice + j)] / bandpassMaxPCM) * (bandpassCanvas.height / 3);
             if (y < ylow) {
                 ylow = y;
             }
@@ -277,17 +284,17 @@ async function graphWaveform(waveform, lowpassWaveform, peaks, truepeaks) {
         // if (i > 50000 && i < 50100) {
         //     console.log(y);
         // }
-        lowpassCanvasContext.fillStyle = "#ffffff";
+        bandpassCanvasContext.fillStyle = "#ffffff";
         if (isPeak) {
             if (isTruePeak) {
-                lowpassCanvasContext.fillStyle = "#00ff00";
-                lowpassCanvasContext.fillRect(x, 0, 1, lowpassCanvas.height);
+                bandpassCanvasContext.fillStyle = "#00ff00";
+                bandpassCanvasContext.fillRect(x, 0, 1, bandpassCanvas.height);
                 canvasContext.fillStyle = "#00ff00";
                 canvasContext.fillRect(x, 0, 1, canvas.height);
             }
-            lowpassCanvasContext.fillStyle = "#ff0000";
+            bandpassCanvasContext.fillStyle = "#ff0000";
         }
-        lowpassCanvasContext.fillRect(x, lowpassCanvas.height / 2 + ylow, 1, yhigh - ylow);
+        bandpassCanvasContext.fillRect(x, bandpassCanvas.height / 2 + ylow, 1, yhigh - ylow);
     }
 
     for (let i = 0; i < canvas.width; i++) {

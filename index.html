@@ -26,37 +26,43 @@
         <div class="controls">
             <div class="sliderContainer">
                 <div class="slider">
-                    <input type="range" min="0" max="2000" value="1000" class="slider" id="lowpassSlider"
-                        oninput="lowpassFrequencyUpdate(this.value)" onchange="lowpassFrequencyChange(this.value)">
-                    <input type="number" id="lowpassSliderInput" min="0" max="2000" value="1000"
-                        oninput="lowpassFrequencyChange(this.value)">
+                    <input type="range" min="1" max="2000" value="1" class="slider" id="bandpassSlider"
+                        oninput="bandpassFrequencyChange(0,this.value)"
+                        onchange="bandpassFrequencyChange(0,this.value)">
+                    <input type="range" min="1" max="2000" value="100" class="slider" id="bandpassSlider2"
+                        oninput="bandpassFrequencyChange(1,this.value)"
+                        onchange="bandpassFrequencyChange(1,this.value)">
+                    <input type="number" id="bandpassSliderInput" min="1" max="2000" value="1"
+                        onchange="bandpassFrequencyChange(0,this.value)">
+                    <input type="number" id="bandpassSliderInput2" min="1" max="2000" value="100"
+                        onchange="bandpassFrequencyChange(1,this.value)">
                 </div>
                 <div class="sliderLabel">
-                    <label for="lowpassSlider">Low-pass Filter Frequency</label>
+                    <label for="bandpassSlider">Band-pass Filter Frequency</label>
                 </div>
                 <div class="slider">
-                    <input type="range" min="0" max="1" value="0.7" step="0.01" class="slider" id="thresholdSlider"
-                        oninput="thresholdUpdate(this.value)" onchange="thresholdChange(this.value)">
-                    <input type="number" id="thresholdSliderInput" min="0" max="1" value="0.7" step="0.01"
-                        oninput="thresholdChange(this.value)">
+                    <input type="range" min="0" max="1" value="0.5" step="0.01" class="slider" id="thresholdSlider"
+                        oninput="thresholdChange(this.value)" onchange="thresholdChange(this.value)">
+                    <input type="number" id="thresholdSliderInput" min="0" max="1" value="0.5" step="0.01"
+                        onchange="thresholdChange(this.value)">
                 </div>
                 <div class="sliderLabel">
                     <label for="thresholdSlider">Beat Threshold</label>
                 </div>
                 <div class="slider">
                     <input type="range" min="0" max="10000" value="1000" step="1" class="slider" id="beatSigSlider"
-                        oninput="beatSigUpdate(this.value)" onchange="beatSigChange(this.value)">
+                        oninput="beatSigChange(this.value)" onchange="beatSigChange(this.value)">
                     <input type="number" id="beatSigSliderInput" min="0" max="10000" value="1000" step="1"
-                        oninput="beatSigChange(this.value)">
+                        onchange="beatSigChange(this.value)">
                 </div>
                 <div class="sliderLabel">
                     <label for="beatSepSlider">Minimum Peaks Hit for Significance</label>
                 </div>
                 <div class="slider">
-                    <input type="range" min="0" max="5" value="0.2" step="0.1" class="slider" id="beatSepSlider"
-                        oninput="beatSepUpdate(this.value)" onchange="beatSepChange(this.value)">
-                    <input type="number" id="beatSepSliderInput" min="0" max="5" value="0.2" step="0.1"
-                        oninput="beatSepChange(this.value)">
+                    <input type="range" min="0" max="5" value="0.1" step="0.1" class="slider" id="beatSepSlider"
+                        oninput="beatSepChange(this.value)" onchange="beatSepChange(this.value)">
+                    <input type="number" id="beatSepSliderInput" min="0" max="5" value="0.1" step="0.1"
+                        onchange="beatSepChange(this.value)">
                 </div>
                 <div class="sliderLabel">
                     <label for="beatSepSlider">Minimum Beat Separation</label>
