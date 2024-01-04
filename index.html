@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Automatic Music Montage Maker</title>
+    <link href="css/index.css" rel="stylesheet" type="text/css">
+    <script src="js/index.js"></script>
+
+</html>
+
+<body>
+    <div class="title">
+        <h1>Automatic Music Montage Maker</h1>
+        <h2>Upload a music clip and video clips to create a montage</h2>
+    </div>
+    <div class="uploadContainer">
+        <div class="upload">
+            <input type="file" id="inputMusic" accept="audio/*" onchange="musicUpload(this.files)">
+            <label for="music">Upload Music</label>
+        </div>
+        <div class="upload">
+            <input type="file" id="inputVideo" accept="video/*" onchange="videoUpload(this.files)" multiple="true">
+            <label for="video">Upload Videos</label>
+        </div>
+        <div class="controls">
+            <div class="sliderContainer">
+                <div class="slider">
+                    <input type="range" min="0" max="2000" value="1000" class="slider" id="lowpassSlider"
+                        oninput="lowpassFrequencyUpdate(this.value)" onchange="lowpassFrequencyChange(this.value)">
+                    <input type="number" id="lowpassSliderInput" value="1000" min="0" max="2000"
+                        oninput="lowpassFrequencyChange(this.value)">
+                </div>
+                <div class="sliderLabel">
+                    <label for="lowpassSlider">Low-pass Filter Frequency</label>
+                </div>
+            </div>
+            <button id="generate" onclick="generate()">Generate</button>
+        </div>
+    </div>
+    <div class="outputContainer">
+        <div class="output">
+            <h3>Output</h3>
+            <div class="outputVideo">
+                <video id="outputVideo" controls></video>
+            </div>
+            <div class="outputMusic">
+                <audio id="outputMusic" controls></audio>
+                <div class="outputMusicCanvasContainer" style="width: 100%; height: auto; overflow-x: scroll;">
+                    <canvas id="outputMusicCanvas" width="10000" height="100"></canvas>
+                    <canvas id="outputMusicCanvas2" width="10000" height="100"></canvas>
+                </div>
+            </div>
+            <div class="download">
+                <a id="download" href="" download="montage.mp4">Download</a>
+            </div>
+        </div>
+</body>
