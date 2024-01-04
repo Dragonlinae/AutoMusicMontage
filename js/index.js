@@ -5,7 +5,9 @@ var beatSignificanceCount = 1000;
 const timeslice = 300;
 var isGenerated = false;
 var timePrev = 0;
-var sigBeatFlash = new Set();
+var sigBeatFlash = null;
+var loadedBuffer = null;
+var loadedSong = null;
 
 window.onload = function () {
     const canvasContainer = document.getElementById("outputMusicCanvasContainer");
@@ -19,7 +21,7 @@ window.onload = function () {
         timeGap = Math.min(Math.abs(timeGap), 0.5);
         canvasContainer.style.transition = "left " + timeGap + "s linear";
         canvasContainer.style.left = -document.getElementById("outputMusic").currentTime * 44100 / timeslice + "px";
-        if (sigBeatFlash.has(Math.round(document.getElementById("outputMusic").currentTime * 10))) {
+        if (sigBeatFlash[Math.round(document.getElementById("outputMusic").currentTime * 10)]) {
             console.log("flash");
             document.getElementById("outputMusic").style.backgroundColor = "#ff0000";
             setTimeout(function () {
@@ -46,9 +48,6 @@ function lowpassFrequencyChange(value) {
     lowpassFrequency = value;
     document.getElementById("lowpassSlider").value = value;
     document.getElementById("lowpassSliderInput").value = value;
-    if (isGenerated) {
-        generate();
-    }
 }
 
 function thresholdUpdate(value) {
@@ -59,9 +58,6 @@ function thresholdChange(value) {
     threshold = value;
     document.getElementById("thresholdSlider").value = value;
     document.getElementById("thresholdSliderInput").value = value;
-    if (isGenerated) {
-        generate();
-    }
 }
 
 function beatSepUpdate(value) {
@@ -72,9 +68,6 @@ function beatSepChange(value) {
     beatSeparation = value;
     document.getElementById("beatSepSlider").value = value;
     document.getElementById("beatSepSliderInput").value = value;
-    if (isGenerated) {
-        generate();
-    }
 }
 
 function beatSigUpdate(value) {
@@ -85,9 +78,6 @@ function beatSigChange(value) {
     beatSignificanceCount = value;
     document.getElementById("beatSigSlider").value = value;
     document.getElementById("beatSigSliderInput").value = value;
-    if (isGenerated) {
-        generate();
-    }
 }
 
 function musicUpload() {
@@ -101,57 +91,93 @@ function videoUpload() {
 }
 
 async function generate() {
+    console.log("Fetching");
     const musicFile = document.getElementById("inputMusic").files[0];
     const videoFiles = document.getElementById("inputVideo").files;
-
-    const musicBuffer = await getMusicBuffer(musicFile);
-    const lowpassMusicBuffer = await lowPassFilter(musicBuffer);
-    const waveform = musicBuffer.getChannelData(0);
+    if (loadedSong != musicFile.name) {
+        console.log("Getting music buffer");
+        const musicBuffer = await getMusicBuffer(musicFile);
+        loadedSong = musicFile.name;
+        loadedBuffer = musicBuffer;
+    }
+    console.log("Getting lowpass buffer");
+    const lowpassMusicBuffer = await lowPassFilter(loadedBuffer);
+    console.log("Generating waveform");
+    const waveform = loadedBuffer.getChannelData(0);
     const lowpassWaveform = lowpassMusicBuffer.getChannelData(0);
-    const peaks = getMusicPeaks(lowpassWaveform);
-    const truepeaks = filterMusicPeaks(lowpassWaveform, peaks);
+    console.log("Getting peaks");
+    const { peaks, truepeaks } = getMusicPeaks(waveform);
+    console.log("Graphing waveform");
     await graphWaveform(waveform, lowpassWaveform, peaks, truepeaks);
+    console.log("Completed");
     isGenerated = true;
 }
 
 function getMusicPeaks(waveform) {
-    var peaks = new Set();
+    var peaks = new Array(waveform.length).fill(false);
+    var truepeaks = new Array(waveform.length).fill(false);
+    sigBeatFlash = new Array(Math.round(waveform.length / 44100 * 10)).fill(false);
+
+    var lastStrongPeak = 0;
+    var lastPeak = 0
+    var groupPeakCount = 0;
+
     for (let i = 0; i < waveform.length; i++) {
         if (Math.abs(waveform[i]) > threshold) {
-            peaks.add(i);
+            peaks[i] = true;
+            if (i - lastStrongPeak > beatSeparation * 44100) {
+                if (groupPeakCount > beatSignificanceCount) {
+                    truepeaks[lastStrongPeak] = true;
+                    sigBeatFlash[Math.round(lastStrongPeak * 10 / 44100)] = true;
+                }
+                lastPeak = i;
+                lastStrongPeak = i;
+                groupPeakCount = 1;
+            } else if (Math.abs(waveform[i]) > Math.abs(waveform[lastStrongPeak])) {
+                lastStrongPeak = i;
+                lastPeak = i;
+                groupPeakCount += 1;
+            } else {
+                lastPeak = i;
+                groupPeakCount += 1;
+            }
         }
     }
-    return peaks;
+    if (groupPeakCount > beatSignificanceCount) {
+        truepeaks[lastStrongPeak] = true;
+        sigBeatFlash[Math.round(lastStrongPeak * 10 / 44100)] = true;
+    }
+    return { peaks, truepeaks };
 }
 
-function filterMusicPeaks(waveform, peaks) {
-    sigBeatFlash.clear();
-    var truepeaks = new Set();
-    var lastStrongPeak = peaks.values().next().value;
-    var lastPeak = lastStrongPeak
-    var groupPeakCount = 0;
-    for (let peak of peaks) {
-        if (peak - lastStrongPeak > beatSeparation * 44100) {
-            if (groupPeakCount > beatSignificanceCount) {
-                truepeaks.add(lastStrongPeak);
-                sigBeatFlash.add(Math.round(lastStrongPeak * 10 / 44100));
-            }
-            lastPeak = peak;
-            lastStrongPeak = peak;
-            groupPeakCount = 1;
-        } else if (Math.abs(waveform[peak]) > Math.abs(waveform[lastStrongPeak])) {
-            lastStrongPeak = peak;
-            lastPeak = peak;
-            groupPeakCount += 1;
-        } else {
-            lastPeak = peak;
-            groupPeakCount += 1;
-        }
-    }
-    truepeaks.add(lastStrongPeak);
-    sigBeatFlash.add(Math.round(lastStrongPeak * 10 / 44100));
-    return truepeaks;
-}
+// function filterMusicPeaks(waveform, peaks) {
+//     sigBeatFlash.clear();
+//     var truepeaks = new Set();
+//     var lastStrongPeak = peaks.values().next().value;
+//     var lastPeak = lastStrongPeak
+//     var groupPeakCount = 0;
+//     for (let peak of peaks) {
+//         if (peak - lastStrongPeak > beatSeparation * 44100) {
+//             if (groupPeakCount > beatSignificanceCount) {
+//                 truepeaks.add(lastStrongPeak);
+//                 sigBeatFlash.add(Math.round(lastStrongPeak * 10 / 44100));
+//             }
+//             lastPeak = peak;
+//             lastStrongPeak = peak;
+//             groupPeakCount = 1;
+//         } else if (Math.abs(waveform[peak]) > Math.abs(waveform[lastStrongPeak])) {
+//             lastStrongPeak = peak;
+//             lastPeak = peak;
+//             groupPeakCount += 1;
+//         } else {
+//             lastPeak = peak;
+//             groupPeakCount += 1;
+//         }
+//     }
+//     truepeaks.add(lastStrongPeak);
+//     sigBeatFlash.add(Math.round(lastStrongPeak * 10 / 44100));
+//     return truepeaks;
+// }
 
 function resizeCanvas(length) {
     const canvas = document.getElementById("outputMusicCanvas");
@@ -241,9 +267,9 @@ async function graphWaveform(waveform, lowpassWaveform, peaks, truepeaks) {
             if (y > yhigh) {
                 yhigh = y;
             }
-            if (peaks.has(Math.round(i * timeslice + j))) {
+            if (peaks[Math.round(i * timeslice + j)]) {
                 isPeak = true;
-                if (truepeaks.has(Math.round(i * timeslice + j))) {
+                if (truepeaks[Math.round(i * timeslice + j)]) {
                     isTruePeak = true;
                 }
             }
