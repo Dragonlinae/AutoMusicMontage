@@ -28,11 +28,20 @@
                 <div class="slider">
                     <input type="range" min="0" max="2000" value="1000" class="slider" id="lowpassSlider"
                         oninput="lowpassFrequencyUpdate(this.value)" onchange="lowpassFrequencyChange(this.value)">
-                    <input type="number" id="lowpassSliderInput" value="1000" min="0" max="2000"
+                    <input type="number" id="lowpassSliderInput" min="0" max="2000" value="1000"
                         oninput="lowpassFrequencyChange(this.value)">
                 </div>
                 <div class="sliderLabel">
                     <label for="lowpassSlider">Low-pass Filter Frequency</label>
+                </div>
+                <div class="slider">
+                    <input type="range" min="0" max="1" value="0.7" step="0.01" class="slider" id="thresholdSlider"
+                        oninput="thresholdUpdate(this.value)" onchange="thresholdChange(this.value)">
+                    <input type="number" id="thresholdSliderInput" min="0" max="1" value="0.7" step="0.01"
+                        oninput="thresholdChange(this.value)">
+                </div>
+                <div class="sliderLabel">
+                    <label for="lowpassSlider">Beat Threshold</label>
                 </div>
             </div>
             <button id="generate" onclick="generate()">Generate</button>
@@ -44,9 +53,9 @@
             <div class="outputVideo">
                 <video id="outputVideo" controls></video>
             </div>
-            <div class="outputMusic">
+            <div class="outputMusic" style="overflow: hidden;">
                 <audio id="outputMusic" controls></audio>
-                <div class="outputMusicCanvasContainer" style="width: 100%; height: auto; overflow-x: scroll;">
+                <div id="outputMusicCanvasContainer" style="position:relative; width: 100%; height: auto;">
                     <canvas id="outputMusicCanvas" width="10000" height="100"></canvas>
                     <canvas id="outputMusicCanvas2" width="10000" height="100"></canvas>
                 </div>
