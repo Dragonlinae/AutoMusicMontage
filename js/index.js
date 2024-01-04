@@ -1,3 +1,6 @@
+const { FFmpeg } = FFmpegWASM;
+const { fetchFile } = FFmpegUtil;
+
 var bandpassLowerFrequency = 1;
 var bandpassUpperFrequency = 100;
 var threshold = 0.5;
@@ -13,6 +16,7 @@ var loadedSong = null;
 var sampleRate = sampleRate;
 
 window.onload = function () {
+
     const canvasContainer = document.getElementById("outputMusicCanvasContainer");
     setInterval(function () {
         if (!isGenerated || document.getElementById("outputMusic").currentTime == timePrev) {
@@ -141,6 +145,23 @@ async function generate() {
     await graphWaveform(waveform, bandpassWaveform, peaks, truepeaks);
     console.log("Completed");
     isGenerated = true;
+
+
+    const ffmpeg = new FFmpeg();
+    await ffmpeg.load();
+    ffmpeg.on("log", console.log);
+    ffmpeg.on("progress", console.log);
+    ffmpeg.on("error", console.log);
+
+    await ffmpeg.writeFile("video1.mp4", await fetchFile(videoFiles[0]));
+    await ffmpeg.writeFile("video2.mp4", await fetchFile(videoFiles[1]));
+    var vidlist = "file 'video1.mp4'\nfile 'video2.mp4'";
+    await ffmpeg.writeFile("vidlist.txt", vidlist);
+    await ffmpeg.exec(["-f", "concat", "-safe", "0", "-i", "vidlist.txt", "-c", "copy", "output.mp4"]);
+
+    const outputVideo = await ffmpeg.readFile("output.mp4");
+    document.getElementById("outputVideo").src = URL.createObjectURL(new Blob([outputVideo.buffer], { type: "video/mp4" }));
+
 }
 
 function getMusicPeaks(waveform) {
