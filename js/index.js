@@ -243,9 +243,9 @@ async function generateVideo() {
     await ffmpeg.writeFile("output.mp4", await fetchFile(savedVideo.src));
     await ffmpeg.writeFile("music.mp3", await fetchFile(document.getElementById("inputMusic").files[0]));
     // Replace audio
-    // await ffmpeg.exec(["-i", "output.mp4", "-i", "music.mp3", "-map", "0:v", "-map", "1:a", "-c:v", "copy", "-shortest", "output2.mp4"]);
+    await ffmpeg.exec(["-i", "output.mp4", "-i", "music.mp3", "-map", "0:v", "-map", "1:a", "-c:v", "copy", "-shortest", "output2.mp4"]);
     // Combine/Mix audio
-    await ffmpeg.exec(["-i", "output.mp4", "-i", "music.mp3", "-filter_complex", "[0:a][1:a]amerge=inputs=2[a]", "-map", "0:v", "-map", "[a]", "-c:v", "copy", "-ac", "2", "output2.mp4"]);
+    // await ffmpeg.exec(["-i", "output.mp4", "-i", "music.mp3", "-filter_complex", "[0:a][1:a]amerge=inputs=2[a]", "-map", "0:v", "-map", "[a]", "-c:v", "copy", "-ac", "2", "output2.mp4"]);
 
     document.getElementById("outputVideo").src = URL.createObjectURL(new Blob([await ffmpeg.readFile("output2.mp4")], { type: "video/mp4" }));
 
@@ -510,24 +510,24 @@ async function trimVideo(ffmpeg, inputName, starttime, endtime, videoDuration, o
 
     var end = lowerBound(endtime, timestamps);
     if (end <= start) {
-        await ffmpeg.exec(["-i", inputName + ".mp4", "-ss", (starttime / 1000).toFixed(3), "-to", (endtime / 1000).toFixed(3), outputName + ".mp4"]);
+        await ffmpeg.exec(["-i", inputName + ".mp4", "-ss", (starttime / 1000).toFixed(3), "-to", (endtime / 1000).toFixed(3), "-an", outputName + ".mp4"]);
     } else {
         // var concatenatorFile = "";
         var concatParam = "concat:";
         var hasStart = false;
         var hasEnd = false;
         if (starttime != start) {
-            await ffmpeg.exec(["-i", inputName + ".mp4", "-ss", (starttime / 1000).toFixed(3), "-to", (start / 1000).toFixed(3), inputName + "-start.mp4"]);
+            await ffmpeg.exec(["-i", inputName + ".mp4", "-ss", (starttime / 1000).toFixed(3), "-to", (start / 1000).toFixed(3), "-an", inputName + "-start.mp4"]);
             // concatenatorFile += "file '" + inputName + "-start.mp4'\n";
             await ffmpeg.exec(["-i", inputName + "-start.mp4", "-c", "copy", inputName + "-start.ts"]);
             concatParam += inputName + "-start.ts|";
             hasStart = true;
         }
         // concatenatorFile += "file '" + inputName + ".mp4'\ninpoint " + start / 1000 + "\noutpoint " + end / 1000 + "\n";
-        ffmpeg.exec(["-i", inputName + ".mp4", "-ss", (start / 1000).toFixed(3), "-to", (end / 1000).toFixed(3), "-c", "copy", inputName + ".ts"]);
+        ffmpeg.exec(["-i", inputName + ".mp4", "-ss", (start / 1000).toFixed(3), "-to", (end / 1000).toFixed(3), "-c", "copy", "-an", inputName + ".ts"]);
         concatParam += inputName + ".ts|";
         if (endtime != end) {
-            await ffmpeg.exec(["-i", inputName + ".mp4", "-ss", (end / 1000).toFixed(3), "-to", (endtime / 1000).toFixed(3), inputName + "-end.mp4"]);
+            await ffmpeg.exec(["-i", inputName + ".mp4", "-ss", (end / 1000).toFixed(3), "-to", (endtime / 1000).toFixed(3), "-an", inputName + "-end.mp4"]);
             // concatenatorFile += "file '" + inputName + "-end.mp4'\n";
             await ffmpeg.exec(["-i", inputName + "-end.mp4", "-c", "copy", inputName + "-end.ts"]);
             concatParam += inputName + "-end.ts|";
