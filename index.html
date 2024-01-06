@@ -44,9 +44,9 @@
                     <label for="bandpassSlider">Band-pass Filter Frequency</label>
                 </div>
                 <div class="slider">
-                    <input type="range" min="0" max="1" value="0.5" step="0.01" class="slider" id="thresholdSlider"
+                    <input type="range" min="0" max="1" value="0.3" step="0.01" class="slider" id="thresholdSlider"
                         oninput="thresholdChange(this.value)" onchange="thresholdChange(this.value)">
-                    <input type="number" id="thresholdSliderInput" min="0" max="1" value="0.5" step="0.01"
+                    <input type="number" id="thresholdSliderInput" min="0" max="1" value="0.3" step="0.01"
                         onchange="thresholdChange(this.value)">
                 </div>
                 <div class="sliderLabel">
@@ -74,28 +74,28 @@
                 <div class="sliderLabel">
                     <label for="beatSepSlider">Beat Separation</label>
                 </div>
-            </div>
-            <button id="generate" onclick="generate()">Generate</button>
+            </div><button id="generate" onclick="generateMusic()">Generate Music</button>
+            <button id="generate" onclick="generateVideo()">Generate Video</button>
         </div>
     </div>
     <div class="outputContainer">
         <div class="output">
             <h3>Output</h3>
-            <div class="outputVideo">
-                <video id="outputVideo" controls></video>
-            </div>
             <div class="outputMusic" style="overflow: hidden;">
                 <audio id="outputMusic" controls></audio>
                 <div id="outputMusicCanvasContainer" style="position:relative; width: 100%; height: auto;">
                     <canvas id="outputMusicCanvas" width="10000" height="100"></canvas>
                     <canvas id="outputMusicCanvas2" width="10000" height="100"></canvas>
                 </div>
+                <p id="outputMusicText"></p>
             </div>
-            <div class="outputImage">
-                <img id="outputImage" src="" alt="Output Image">
+            <div class="outputVideo">
+                <video id="outputVideo" controls></video>
+                <p id="outputVideoText"></p>
+                <p id="outputVideoTextVerbose"></p>
             </div>
             <div class="download">
-                <a id="download" href="" download="montage.mp4">Download</a>
+                <button id="downloadVideo" onclick="downloadVideo()">Download Video</button>
             </div>
         </div>
 </body>

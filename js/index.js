@@ -3,7 +3,7 @@ const { fetchFile } = FFmpegUtil;
 
 var bandpassLowerFrequency = 1;
 var bandpassUpperFrequency = 100;
-var threshold = 0.5;
+var threshold = 0.3;
 var beatSeparationLower = 0.1;
 var beatSeparationUpper = 5;
 var beatSignificanceCount = 1000;
@@ -14,6 +14,8 @@ var sigBeatFlash = null;
 var loadedBuffer = null;
 var loadedSong = null;
 var sampleRate = sampleRate;
+var peakTimestamps = null;
+var ffmpeg = null;
 
 window.onload = function () {
 
@@ -119,8 +121,8 @@ function musicUpload() {
 }
 
 function videoUpload() {
-    const file = document.getElementById("inputVideo").files[0];
-    document.getElementById("outputVideo").src = URL.createObjectURL(file);
+    // const file = document.getElementById("inputVideo").files[0];
+    // document.getElementById("outputVideo").src = URL.createObjectURL(file);
 }
 
 async function generate() {
@@ -131,78 +133,122 @@ async function generate() {
 async function generateMusic() {
     console.log("Fetching");
     const musicFile = document.getElementById("inputMusic").files[0];
-    // if (loadedSong != musicFile.name) {
-    //     console.log("Getting music buffer");
-    //     const musicBuffer = await getMusicBuffer(musicFile);
-    //     loadedSong = musicFile.name;
-    //     loadedBuffer = musicBuffer;
-    //     sampleRate = musicBuffer.sampleRate;
-    // }
-    // console.log("Getting bandpass buffer");
-    // const bandpassMusicBuffer = await bandpassFilter(loadedBuffer);
-    // console.log("Generating waveform");
-    // const waveform = loadedBuffer.getChannelData(0);
-    // const bandpassWaveform = bandpassMusicBuffer.getChannelData(0);
-    // console.log("Getting peaks");
-    // const { peaks, truepeaks } = getMusicPeaks(bandpassWaveform);
-    // console.log("Graphing waveform");
-    // await graphWaveform(waveform, bandpassWaveform, peaks, truepeaks);
-    // console.log("Completed");
-    // isGenerated = true;
+    if (loadedSong != musicFile.name) {
+        console.log("Getting music buffer");
+        const musicBuffer = await getMusicBuffer(musicFile);
+        loadedSong = musicFile.name;
+        loadedBuffer = musicBuffer;
+        sampleRate = musicBuffer.sampleRate;
+    }
+    console.log("Getting bandpass buffer");
+    const bandpassMusicBuffer = await bandpassFilter(loadedBuffer);
+    console.log("Generating waveform");
+    const waveform = loadedBuffer.getChannelData(0);
+    const bandpassWaveform = bandpassMusicBuffer.getChannelData(0);
+    console.log("Getting peaks");
+    const { peaks, truepeaks } = getMusicPeaks(bandpassWaveform);
+    console.log("Graphing waveform");
+    await graphWaveform(waveform, bandpassWaveform, peaks, truepeaks);
+    console.log("Completed");
+    peakTimestamps = new Array();
+    peakTimestamps.push(0);
+    for (let i = 0; i < truepeaks.length; i++) {
+        if (truepeaks[i]) {
+            peakTimestamps.push(Math.round(i * 1000 / sampleRate));
+        }
+    }
+    console.log(peakTimestamps);
+    document.getElementById("outputMusicText").innerHTML = "Number of beats: " + peakTimestamps.length;
+    isGenerated = true;
 }
 
 async function generateVideo() {
 
     const videoFiles = document.getElementById("inputVideo").files;
 
-    const ffmpeg = new FFmpeg();
+    document.getElementById("outputVideoText").innerHTML = "Generating...";
+
+    for (let i = 0; i < videoFiles.length; i++) {
+        ffmpeg = new FFmpeg();
+        await ffmpeg.load();
+        ffmpeg.on("log", console.log);
+        ffmpeg.on("progress", function (data) {
+            console.log(data);
+            document.getElementById("outputVideoTextVerbose").innerHTML = data;
+        });
+        ffmpeg.on("error", console.log);
+
+        document.getElementById("outputVideoText").innerHTML = "Working on video " + (i + 1) + "/" + videoFiles.length;
+        var starttime = 0;
+        // Using videoOutput duration to ensure accuracy and prevent roundoff error from accumulating
+        var endtime = peakTimestamps[i + 1] - Math.round(i == 0 ? 0 : document.getElementById("videoOutput").duration * 1000);
+        var inputName = "video" + i;
+        var outputName = "video" + i + "-cut";
+        await ffmpeg.writeFile(inputName + ".mp4", await fetchFile(videoFiles[i]));
+        var videoDuration = await getVideoDuration(videoFiles[i]);
+        await trimVideo(ffmpeg, inputName, starttime, endtime, videoDuration, outputName);
+        // Faster Method
+        await ffmpeg.deleteFile(inputName + ".mp4");
+
+        // Janky save and retrieve with new ffmpeg instance
+        if (i == 0) {
+            document.getElementById("outputVideo").src = URL.createObjectURL(new Blob([await ffmpeg.readFile(outputName + ".mp4")], { type: "video/mp4" }));
+            // await ffmpeg.writeFile("output.mp4", await ffmpeg.readFile(outputName + ".mp4"));
+            await ffmpeg.deleteFile(outputName + ".mp4");
+        } else {
+            var savedVideo = document.getElementById("outputVideo");
+            await ffmpeg.writeFile("output.mp4", await fetchFile(savedVideo.src));
+
+            var vidlist = "file 'output.mp4'\nfile '" + outputName + ".mp4'";
+            await ffmpeg.writeFile("vidlist.txt", vidlist);
+            await ffmpeg.exec(["-f", "concat", "-safe", "0", "-i", "vidlist.txt", "-c", "copy", "output2.mp4"]);
+            await ffmpeg.deleteFile("output.mp4");
+            await ffmpeg.deleteFile(outputName + ".mp4");
+            await ffmpeg.deleteFile("vidlist.txt");
+            // await ffmpeg.writeFile("output.mp4", await ffmpeg.readFile("output2.mp4"));
+            document.getElementById("outputVideo").src = URL.createObjectURL(new Blob([await ffmpeg.readFile("output2.mp4")], { type: "video/mp4" }));
+            await ffmpeg.deleteFile("output2.mp4");
+        }
+    }
+
+
+    ffmpeg = new FFmpeg();
     await ffmpeg.load();
     ffmpeg.on("log", console.log);
-    ffmpeg.on("progress", console.log);
+    ffmpeg.on("progress", function (data) {
+        console.log(data);
+        document.getElementById("outputVideoTextVerbose").innerHTML = data.progress;
+    });
     ffmpeg.on("error", console.log);
 
-    for (let i = 0; i < videoFiles.length; i++) {
-        await ffmpeg.writeFile("video" + i + ".mp4", await fetchFile(videoFiles[i]));
-        await ffmpeg.exec(["-skip_frame", "nokey", "-i", "video" + i + ".mp4", "-fps_mode", "vfr", "-frame_pts", "true", "-r", "1000", "-f", "mkvtimestamp_v2", "keyframes" + i + ".txt"]);
-        var text = await ffmpeg.readFile("keyframes" + i + ".txt");
-        var timestamps = new TextDecoder("utf-8").decode(text);
-        timestamps = timestamps.split("\n");
-        timestamps[0] = "0";
-        // convert from string to int
-        timestamps = timestamps.map(function (x) { return parseInt(x); });
-        timestamps[timestamps.length - 1] = await getVideoDuration(videoFiles[i]);
-        console.log(timestamps.join("\n"));
-        console.log(lowerBound(1000, timestamps));
-        console.log(upperBound(1000, timestamps));
+    // document.getElementById("outputVideoText").innerHTML = "Combining videos...";
 
-        // cut video between 5 and 10 seconds
-        var starttime = 5000;
-        var endtime = 10000;
-        var start = upperBound(starttime, timestamps);
-        var end = lowerBound(endtime, timestamps);
-        // reencode from starttime to start
-        await ffmpeg.exec(["-i", "video" + i + ".mp4", "-ss", (starttime / 1000).toFixed(3), "-to", (start / 1000).toFixed(3), "video" + i + "-start.mp4"]);
-        // reencode from end to endtime
-        await ffmpeg.exec(["-i", "video" + i + ".mp4", "-ss", (end / 1000).toFixed(3), "-to", (endtime / 1000).toFixed(3), "video" + i + "-end.mp4"]);
-        var concatenatorFile = "file 'video" + i + "-start.mp4'\nfile 'video" + i + ".mp4'\ninpoint " + start / 1000 + "\noutpoint " + end / 1000 + "\nfile 'video" + i + "-end.mp4'";
-        await ffmpeg.writeFile("concatenatorFile" + i + ".txt", concatenatorFile);
-        await ffmpeg.exec(["-f", "concat", "-safe", "0", "-i", "concatenatorFile" + i + ".txt", "-c", "copy", "video" + i + "-cut.mp4"]);
-        // delete intermediate files
+    // // concatenate videos
+    // var vidlist = "";
+    // for (let i = 0; i < videoFiles.length; i++) {
+    //     vidlist += "file 'video" + i + "-cut.mp4'\n";
+    // }
+    // await ffmpeg.writeFile("vidlist.txt", vidlist);
+    // await ffmpeg.exec(["-f", "concat", "-safe", "0", "-i", "vidlist.txt", "-c", "copy", "output.mp4"]);
+    // // document.getElementById("outputVideo").src = URL.createObjectURL(new Blob([await ffmpeg.readFile("output.mp4")], { type: "video/mp4" }));
 
-    }
-    // concatenate videos
-    var vidlist = "";
-    for (let i = 0; i < videoFiles.length; i++) {
-        vidlist += "file 'video" + i + "-cut.mp4'\n";
-    }
-    await ffmpeg.writeFile("vidlist.txt", vidlist);
-    await ffmpeg.exec(["-f", "concat", "-safe", "0", "-i", "vidlist.txt", "-c", "copy", "output.mp4"]);
-    document.getElementById("outputVideo").src = URL.createObjectURL(new Blob([await ffmpeg.readFile("output.mp4")], { type: "video/mp4" }));
+    document.getElementById("outputVideoText").innerHTML = "Adding music...";
+
+    var savedVideo = document.getElementById("outputVideo");
+    await ffmpeg.writeFile("output.mp4", await fetchFile(savedVideo.src));
+    await ffmpeg.writeFile("music.mp3", await fetchFile(document.getElementById("inputMusic").files[0]));
+    // Replace audio
+    // await ffmpeg.exec(["-i", "output.mp4", "-i", "music.mp3", "-map", "0:v", "-map", "1:a", "-c:v", "copy", "-shortest", "output2.mp4"]);
+    // Combine/Mix audio
+    await ffmpeg.exec(["-i", "output.mp4", "-i", "music.mp3", "-filter_complex", "[0:a][1:a]amerge=inputs=2[a]", "-map", "0:v", "-map", "[a]", "-c:v", "copy", "-ac", "2", "output2.mp4"]);
+
+    document.getElementById("outputVideo").src = URL.createObjectURL(new Blob([await ffmpeg.readFile("output2.mp4")], { type: "video/mp4" }));
+
+    document.getElementById("outputVideoText").innerHTML = "Video completed";
 
     // await ffmpeg.writeFile("video1.mp4", await fetchFile(videoFiles[0]));
     // await ffmpeg.writeFile("video2.mp4", await fetchFile(videoFiles[1]));
     // var vidlist = "file 'video1.mp4'\nfile 'video2.mp4'";
-    // // get duration of video 1 in milliseconds
     // var duration = await getVideoDuration(videoFiles[0]);
     // console.log(duration);
 
@@ -441,6 +487,54 @@ async function graphWaveform(waveform, bandpassWaveform, peaks, truepeaks) {
     }
 }
 
+async function trimVideo(ffmpeg, inputName, starttime, endtime, videoDuration, outputName) {
+    await ffmpeg.exec(["-skip_frame", "nokey", "-i", inputName + ".mp4", "-fps_mode", "passthrough", "-frame_pts", "true", "-r", "1000", "-f", "mkvtimestamp_v2", inputName + "-keyframes" + ".txt"]);
+    var text = await ffmpeg.readFile(inputName + "-keyframes" + ".txt");
+    var timestamps = new TextDecoder("utf-8").decode(text);
+    timestamps = timestamps.split("\n");
+    timestamps[0] = "0";
+    // convert from string to int
+    timestamps = timestamps.map(function (x) { return parseInt(x); });
+    timestamps[timestamps.length - 1] = videoDuration
+
+    var start = upperBound(starttime, timestamps);
+
+    // Inaccurate start but faster
+    endtime += start - starttime;
+    starttime = start;
+
+    var end = lowerBound(endtime, timestamps);
+    if (end <= start) {
+        await ffmpeg.exec(["-i", inputName + ".mp4", "-ss", (starttime / 1000).toFixed(3), "-to", (endtime / 1000).toFixed(3), outputName + ".mp4"]);
+    } else {
+        var concatenatorFile = "";
+        var hasStart = false;
+        var hasEnd = false;
+        if (starttime != start) {
+            await ffmpeg.exec(["-i", inputName + ".mp4", "-ss", (starttime / 1000).toFixed(3), "-to", (start / 1000).toFixed(3), inputName + "-start.mp4"]);
+            concatenatorFile += "file '" + inputName + "-start.mp4'\n";
+            hasStart = true;
+        }
+        concatenatorFile += "file '" + inputName + ".mp4'\ninpoint " + start / 1000 + "\noutpoint " + end / 1000 + "\n";
+        if (endtime != end) {
+            await ffmpeg.exec(["-i", inputName + ".mp4", "-ss", (end / 1000).toFixed(3), "-to", (endtime / 1000).toFixed(3), inputName + "-end.mp4"]);
+            concatenatorFile += "file '" + inputName + "-end.mp4'\n";
+            hasEnd = true;
+        }
+        await ffmpeg.writeFile("concatenatorFile" + inputName + ".txt", concatenatorFile);
+        await ffmpeg.exec(["-f", "concat", "-safe", "0", "-i", "concatenatorFile" + inputName + ".txt", "-c", "copy", outputName + ".mp4"]);
+
+        if (hasStart) {
+            await ffmpeg.deleteFile(inputName + "-start.mp4");
+        }
+        if (hasEnd) {
+            await ffmpeg.deleteFile(inputName + "-end.mp4");
+        }
+        await ffmpeg.deleteFile("concatenatorFile" + inputName + ".txt");
+        await ffmpeg.deleteFile(inputName + "-keyframes" + ".txt");
+    }
+}
+
 // return the value of the element that is the same or just below the target
 function lowerBound(target, arr) {
     var low = 0;
@@ -481,4 +575,11 @@ async function getVideoDuration(videoFile) {
             resolve(Math.round(video.duration * 1000));
         };
     });
+}
+
+function downloadVideo() {
+    var a = document.createElement("a");
+    a.href = document.getElementById("outputVideo").src;
+    a.download = "montage.mp4";
+    a.click();
 }
