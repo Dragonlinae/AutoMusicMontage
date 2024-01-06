@@ -124,28 +124,36 @@ function videoUpload() {
 }
 
 async function generate() {
+    // await generateMusic();
+    await generateVideo();
+}
+
+async function generateMusic() {
     console.log("Fetching");
     const musicFile = document.getElementById("inputMusic").files[0];
-    const videoFiles = document.getElementById("inputVideo").files;
-    if (loadedSong != musicFile.name) {
-        console.log("Getting music buffer");
-        const musicBuffer = await getMusicBuffer(musicFile);
-        loadedSong = musicFile.name;
-        loadedBuffer = musicBuffer;
-        sampleRate = musicBuffer.sampleRate;
-    }
-    console.log("Getting bandpass buffer");
-    const bandpassMusicBuffer = await bandpassFilter(loadedBuffer);
-    console.log("Generating waveform");
-    const waveform = loadedBuffer.getChannelData(0);
-    const bandpassWaveform = bandpassMusicBuffer.getChannelData(0);
-    console.log("Getting peaks");
-    const { peaks, truepeaks } = getMusicPeaks(bandpassWaveform);
-    console.log("Graphing waveform");
-    await graphWaveform(waveform, bandpassWaveform, peaks, truepeaks);
-    console.log("Completed");
-    isGenerated = true;
+    // if (loadedSong != musicFile.name) {
+    //     console.log("Getting music buffer");
+    //     const musicBuffer = await getMusicBuffer(musicFile);
+    //     loadedSong = musicFile.name;
+    //     loadedBuffer = musicBuffer;
+    //     sampleRate = musicBuffer.sampleRate;
+    // }
+    // console.log("Getting bandpass buffer");
+    // const bandpassMusicBuffer = await bandpassFilter(loadedBuffer);
+    // console.log("Generating waveform");
+    // const waveform = loadedBuffer.getChannelData(0);
+    // const bandpassWaveform = bandpassMusicBuffer.getChannelData(0);
+    // console.log("Getting peaks");
+    // const { peaks, truepeaks } = getMusicPeaks(bandpassWaveform);
+    // console.log("Graphing waveform");
+    // await graphWaveform(waveform, bandpassWaveform, peaks, truepeaks);
+    // console.log("Completed");
+    // isGenerated = true;
+}
 
+async function generateVideo() {
+
+    const videoFiles = document.getElementById("inputVideo").files;
 
     const ffmpeg = new FFmpeg();
     await ffmpeg.load();
@@ -153,14 +161,65 @@ async function generate() {
     ffmpeg.on("progress", console.log);
     ffmpeg.on("error", console.log);
 
-    await ffmpeg.writeFile("video1.mp4", await fetchFile(videoFiles[0]));
-    await ffmpeg.writeFile("video2.mp4", await fetchFile(videoFiles[1]));
-    var vidlist = "file 'video1.mp4'\nfile 'video2.mp4'";
+    for (let i = 0; i < videoFiles.length; i++) {
+        await ffmpeg.writeFile("video" + i + ".mp4", await fetchFile(videoFiles[i]));
+        await ffmpeg.exec(["-skip_frame", "nokey", "-i", "video" + i + ".mp4", "-fps_mode", "vfr", "-frame_pts", "true", "-r", "1000", "-f", "mkvtimestamp_v2", "keyframes" + i + ".txt"]);
+        var text = await ffmpeg.readFile("keyframes" + i + ".txt");
+        var timestamps = new TextDecoder("utf-8").decode(text);
+        timestamps = timestamps.split("\n");
+        timestamps[0] = "0";
+        // convert from string to int
+        timestamps = timestamps.map(function (x) { return parseInt(x); });
+        timestamps[timestamps.length - 1] = await getVideoDuration(videoFiles[i]);
+        console.log(timestamps.join("\n"));
+        console.log(lowerBound(1000, timestamps));
+        console.log(upperBound(1000, timestamps));
+
+        // cut video between 5 and 10 seconds
+        var starttime = 5000;
+        var endtime = 10000;
+        var start = upperBound(starttime, timestamps);
+        var end = lowerBound(endtime, timestamps);
+        // reencode from starttime to start
+        await ffmpeg.exec(["-i", "video" + i + ".mp4", "-ss", (starttime / 1000).toFixed(3), "-to", (start / 1000).toFixed(3), "video" + i + "-start.mp4"]);
+        // reencode from end to endtime
+        await ffmpeg.exec(["-i", "video" + i + ".mp4", "-ss", (end / 1000).toFixed(3), "-to", (endtime / 1000).toFixed(3), "video" + i + "-end.mp4"]);
+        var concatenatorFile = "file 'video" + i + "-start.mp4'\nfile 'video" + i + ".mp4'\ninpoint " + start / 1000 + "\noutpoint " + end / 1000 + "\nfile 'video" + i + "-end.mp4'";
+        await ffmpeg.writeFile("concatenatorFile" + i + ".txt", concatenatorFile);
+        await ffmpeg.exec(["-f", "concat", "-safe", "0", "-i", "concatenatorFile" + i + ".txt", "-c", "copy", "video" + i + "-cut.mp4"]);
+        // delete intermediate files
+
+    }
+    // concatenate videos
+    var vidlist = "";
+    for (let i = 0; i < videoFiles.length; i++) {
+        vidlist += "file 'video" + i + "-cut.mp4'\n";
+    }
     await ffmpeg.writeFile("vidlist.txt", vidlist);
     await ffmpeg.exec(["-f", "concat", "-safe", "0", "-i", "vidlist.txt", "-c", "copy", "output.mp4"]);
+    document.getElementById("outputVideo").src = URL.createObjectURL(new Blob([await ffmpeg.readFile("output.mp4")], { type: "video/mp4" }));
 
-    const outputVideo = await ffmpeg.readFile("output.mp4");
-    document.getElementById("outputVideo").src = URL.createObjectURL(new Blob([outputVideo.buffer], { type: "video/mp4" }));
+    // await ffmpeg.writeFile("video1.mp4", await fetchFile(videoFiles[0]));
+    // await ffmpeg.writeFile("video2.mp4", await fetchFile(videoFiles[1]));
+    // var vidlist = "file 'video1.mp4'\nfile 'video2.mp4'";
+    // // get duration of video 1 in milliseconds
+    // var duration = await getVideoDuration(videoFiles[0]);
+    // console.log(duration);
+
+    // await ffmpeg.writeFile("vidlist.txt", vidlist);
+    // var status = await ffmpeg.exec(["-f", "concat", "-safe", "0", "-i", "vidlist.txt", "-c", "copy", "output.mp4"]);
+
+    // // await ffmpeg.exec(["-skip_frame", "nokey", "-i", "output.mp4", "-fps_mode", "vfr", "-frame_pts", "true", "-r", "1000", "keyframes/out-%d.png"]);
+    // await ffmpeg.exec(["-skip_frame", "nokey", "-i", "output.mp4", "-fps_mode", "vfr", "-frame_pts", "true", "-r", "1000", "-f", "mkvtimestamp_v2", "keyframes.txt"]);
+    // var text = await ffmpeg.readFile("keyframes.txt");
+    // var timestamps = new TextDecoder("utf-8").decode(text);
+    // timestamps = timestamps.split("\n");
+    // timestamps[0] = "0";
+    // timestamps[timestamps.length - 1] = ffmpeg.getMediaInfo().duration;
+    // console.log(timestamps);
+
+    // const outputVideo = await ffmpeg.readFile("output.mp4");
+    // document.getElementById("outputVideo").src = URL.createObjectURL(new Blob([outputVideo.buffer], { type: "video/mp4" }));
 
 }
 
@@ -380,4 +439,46 @@ async function graphWaveform(waveform, bandpassWaveform, peaks, truepeaks) {
         canvasContext.fillStyle = "#ffffff";
         canvasContext.fillRect(x, canvas.height / 2 + ylow, 1, yhigh - ylow);
     }
+}
+
+// return the value of the element that is the same or just below the target
+function lowerBound(target, arr) {
+    var low = 0;
+    var high = arr.length;
+    while (low < high) {
+        var mid = Math.floor((low + high) / 2);
+        if (target < arr[mid]) {
+            high = mid;
+        } else {
+            low = mid + 1;
+        }
+    }
+    return arr[low - 1];
+}
+
+// return the value of the element that is the same or just above the target
+function upperBound(target, arr) {
+    var low = 0;
+    var high = arr.length;
+    while (low < high) {
+        var mid = Math.floor((low + high) / 2);
+        if (target > arr[mid]) {
+            low = mid + 1;
+        } else {
+            high = mid;
+        }
+    }
+    return arr[low];
+}
+
+
+async function getVideoDuration(videoFile) {
+    var video = document.createElement("video");
+    video.preload = "metadata";
+    video.src = URL.createObjectURL(videoFile);
+    return new Promise((resolve) => {
+        video.onloadedmetadata = function () {
+            resolve(Math.round(video.duration * 1000));
+        };
+    });
 }
