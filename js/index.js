@@ -198,13 +198,18 @@ async function generateVideo() {
         } else {
             var savedVideo = document.getElementById("outputVideo");
             await ffmpeg.writeFile("output.mp4", await fetchFile(savedVideo.src));
+            await ffmpeg.exec(["-i", "output.mp4", "-c", "copy", "output.ts"]);
+            await ffmpeg.exec(["-i", outputName + ".mp4", "-c", "copy", outputName + ".ts"]);
 
-            var vidlist = "file 'output.mp4'\nfile '" + outputName + ".mp4'";
-            await ffmpeg.writeFile("vidlist.txt", vidlist);
-            await ffmpeg.exec(["-f", "concat", "-safe", "0", "-i", "vidlist.txt", "-c", "copy", "output2.mp4"]);
+            // var vidlist = "file 'output.mp4'\nfile '" + outputName + ".mp4'";
+            // await ffmpeg.writeFile("vidlist.txt", vidlist);
+            // await ffmpeg.exec(["-f", "concat", "-safe", "0", "-i", "vidlist.txt", "-c", "copy", "output2.mp4"]);
+            await ffmpeg.exec(["-i", "concat:output.ts|" + outputName + ".ts", "-c", "copy", "output2.mp4"]);
+            await ffmpeg.deleteFile("output.ts");
             await ffmpeg.deleteFile("output.mp4");
+            await ffmpeg.deleteFile(outputName + ".ts");
             await ffmpeg.deleteFile(outputName + ".mp4");
-            await ffmpeg.deleteFile("vidlist.txt");
+            // await ffmpeg.deleteFile("vidlist.txt");
             // await ffmpeg.writeFile("output.mp4", await ffmpeg.readFile("output2.mp4"));
             document.getElementById("outputVideo").src = URL.createObjectURL(new Blob([await ffmpeg.readFile("output2.mp4")], { type: "video/mp4" }));
             await ffmpeg.deleteFile("output2.mp4");
@@ -507,30 +512,41 @@ async function trimVideo(ffmpeg, inputName, starttime, endtime, videoDuration, o
     if (end <= start) {
         await ffmpeg.exec(["-i", inputName + ".mp4", "-ss", (starttime / 1000).toFixed(3), "-to", (endtime / 1000).toFixed(3), outputName + ".mp4"]);
     } else {
-        var concatenatorFile = "";
+        // var concatenatorFile = "";
+        var concatParam = "concat:";
         var hasStart = false;
         var hasEnd = false;
         if (starttime != start) {
             await ffmpeg.exec(["-i", inputName + ".mp4", "-ss", (starttime / 1000).toFixed(3), "-to", (start / 1000).toFixed(3), inputName + "-start.mp4"]);
-            concatenatorFile += "file '" + inputName + "-start.mp4'\n";
+            // concatenatorFile += "file '" + inputName + "-start.mp4'\n";
+            await ffmpeg.exec(["-i", inputName + "-start.mp4", "-c", "copy", inputName + "-start.ts"]);
+            concatParam += inputName + "-start.ts|";
             hasStart = true;
         }
-        concatenatorFile += "file '" + inputName + ".mp4'\ninpoint " + start / 1000 + "\noutpoint " + end / 1000 + "\n";
+        // concatenatorFile += "file '" + inputName + ".mp4'\ninpoint " + start / 1000 + "\noutpoint " + end / 1000 + "\n";
+        ffmpeg.exec(["-i", inputName + ".mp4", "-ss", (start / 1000).toFixed(3), "-to", (end / 1000).toFixed(3), "-c", "copy", inputName + ".ts"]);
+        concatParam += inputName + ".ts|";
         if (endtime != end) {
             await ffmpeg.exec(["-i", inputName + ".mp4", "-ss", (end / 1000).toFixed(3), "-to", (endtime / 1000).toFixed(3), inputName + "-end.mp4"]);
-            concatenatorFile += "file '" + inputName + "-end.mp4'\n";
+            // concatenatorFile += "file '" + inputName + "-end.mp4'\n";
+            await ffmpeg.exec(["-i", inputName + "-end.mp4", "-c", "copy", inputName + "-end.ts"]);
+            concatParam += inputName + "-end.ts|";
             hasEnd = true;
         }
-        await ffmpeg.writeFile("concatenatorFile" + inputName + ".txt", concatenatorFile);
-        await ffmpeg.exec(["-f", "concat", "-safe", "0", "-i", "concatenatorFile" + inputName + ".txt", "-c", "copy", outputName + ".mp4"]);
+        // await ffmpeg.writeFile("concatenatorFile" + inputName + ".txt", concatenatorFile);
+        // await ffmpeg.exec(["-f", "concat", "-safe", "0", "-i", "concatenatorFile" + inputName + ".txt", "-c", "copy", outputName + ".mp4"]);
+        concatParam = concatParam.slice(0, -1);
+        await ffmpeg.exec(["-i", concatParam, "-c", "copy", outputName + ".mp4"]);
 
         if (hasStart) {
             await ffmpeg.deleteFile(inputName + "-start.mp4");
+            await ffmpeg.deleteFile(inputName + "-start.ts");
         }
         if (hasEnd) {
             await ffmpeg.deleteFile(inputName + "-end.mp4");
+            await ffmpeg.deleteFile(inputName + "-end.ts");
         }
-        await ffmpeg.deleteFile("concatenatorFile" + inputName + ".txt");
+        // await ffmpeg.deleteFile("concatenatorFile" + inputName + ".txt");
         await ffmpeg.deleteFile(inputName + "-keyframes" + ".txt");
     }
 }
