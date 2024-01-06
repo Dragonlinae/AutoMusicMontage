@@ -180,8 +180,8 @@ async function generateVideo() {
 
         document.getElementById("outputVideoText").innerHTML = "Working on video " + (i + 1) + "/" + videoFiles.length;
         var starttime = 0;
-        // Using videoOutput duration to ensure accuracy and prevent roundoff error from accumulating
-        var endtime = peakTimestamps[i + 1] - Math.round(i == 0 ? 0 : document.getElementById("videoOutput").duration * 1000);
+        // Using outputVideo duration to ensure accuracy and prevent roundoff error from accumulating
+        var endtime = peakTimestamps[i + 1] - Math.round(i == 0 ? 0 : document.getElementById("outputVideo").duration * 1000);
         var inputName = "video" + i;
         var outputName = "video" + i + "-cut";
         await ffmpeg.writeFile(inputName + ".mp4", await fetchFile(videoFiles[i]));
