@@ -263,10 +263,10 @@ async function generateVideo() {
     var savedVideo = document.getElementById("outputVideo");
     await ffmpeg.writeFile("output.mp4", await fetchFile(savedVideo.src));
     await ffmpeg.writeFile("music.mp3", await fetchFile(document.getElementById("inputMusic").files[0]));
-    await ffmpeg.exec(["-i", "music.mp3", "-ss", "0", "-to", (document.getElementById("outputVideo").duration).toFixed(3), "-c", "copy", "music-cut.mp3"]);
+    await ffmpeg.exec(["-i", "music.mp3", "-ss", "0", "-to", (document.getElementById("outputVideo").duration) + "ms", "-c", "copy", "music-cut.mp3"]);
     var savedAudio = document.getElementById("outputVideoAudio");
     await ffmpeg.writeFile("output.wav", await fetchFile(savedAudio.src));
-    await ffmpeg.exec(["-i", "output.wav", "-ss", "0", "-to", (document.getElementById("outputVideo").duration).toFixed(3), "-c", "copy", "output2.wav"]);
+    await ffmpeg.exec(["-i", "output.wav", "-ss", "0", "-to", (document.getElementById("outputVideo").duration) + "ms", "-c", "copy", "output2.wav"]);
     await ffmpeg.deleteFile("output.wav");
     // Resample music-cut to the same sample rate as output2
     // var sampleRate = await getAudioSampleRate(new Blob([await ffmpeg.readFile("output2.mp3")], { type: "audio/mp3" }));
@@ -530,14 +530,18 @@ async function graphWaveform(waveform, bandpassWaveform, peaks, truepeaks) {
 }
 
 async function trimVideo(ffmpeg, inputName, starttime, endtime, videoDuration, audioOffset, outputName) {
-    await ffmpeg.exec(["-skip_frame", "nokey", "-i", inputName + ".mp4", "-fps_mode", "passthrough", "-frame_pts", "true", "-r", "1000", "-f", "mkvtimestamp_v2", inputName + "-keyframes" + ".txt"]);
+    await ffmpeg.exec(["-skip_frame", "nokey", "-i", inputName + ".mp4", "-fps_mode", "vfr", "-frame_pts", "true", "-r", "1000", "-f", "mkvtimestamp_v2", inputName + "-keyframes" + ".txt"]);
     var text = await ffmpeg.readFile(inputName + "-keyframes" + ".txt");
     var timestamps = new TextDecoder("utf-8").decode(text);
     timestamps = timestamps.split("\n");
-    timestamps[0] = "0";
+    timestamps[0] = timestamps[1];
+    for (let i = 1; i < timestamps.length; i++) {
+        timestamps[i] -= timestamps[0];
+    }
     // convert from string to int
-    timestamps = timestamps.map(function (x) { return parseInt(x); });
+    // timestamps = timestamps.map(function (x) { return parseInt(x); });
     timestamps[timestamps.length - 1] = videoDuration
+    timestamps[0] = 0;
 
     var start = upperBound(starttime, timestamps);
 
@@ -547,24 +551,24 @@ async function trimVideo(ffmpeg, inputName, starttime, endtime, videoDuration, a
 
     var end = lowerBound(endtime, timestamps);
     if (end <= start) {
-        await ffmpeg.exec(["-i", inputName + ".mp4", "-ss", (starttime / 1000).toFixed(3), "-to", (endtime / 1000).toFixed(3), "-an", outputName + ".mp4"]);
+        await ffmpeg.exec(["-i", inputName + ".mp4", "-ss", (starttime) + "ms", "-to", (endtime) + "ms", "-an", outputName + ".mp4"]);
     } else {
         // var concatenatorFile = "";
         var concatParam = "concat:";
         var hasStart = false;
         var hasEnd = false;
         if (starttime != start) {
-            await ffmpeg.exec(["-i", inputName + ".mp4", "-ss", (starttime / 1000).toFixed(3), "-to", (start / 1000).toFixed(3), "-an", inputName + "-start.mp4"]);
+            await ffmpeg.exec(["-i", inputName + ".mp4", "-ss", (starttime) + "ms", "-to", (start) + "ms", "-an", inputName + "-start.mp4"]);
             // concatenatorFile += "file '" + inputName + "-start.mp4'\n";
             await ffmpeg.exec(["-i", inputName + "-start.mp4", "-c", "copy", inputName + "-start.ts"]);
             concatParam += inputName + "-start.ts|";
             hasStart = true;
         }
         // concatenatorFile += "file '" + inputName + ".mp4'\ninpoint " + start / 1000 + "\noutpoint " + end / 1000 + "\n";
-        ffmpeg.exec(["-i", inputName + ".mp4", "-ss", (start / 1000).toFixed(3), "-to", (end / 1000).toFixed(3), "-c", "copy", "-an", inputName + ".ts"]);
+        await ffmpeg.exec(["-i", inputName + ".mp4", "-ss", (start) + "ms", "-to", (end) + "ms", "-c", "copy", "-an", inputName + ".ts"]);
         concatParam += inputName + ".ts|";
         if (endtime != end) {
-            await ffmpeg.exec(["-i", inputName + ".mp4", "-ss", (end / 1000).toFixed(3), "-to", (endtime / 1000).toFixed(3), "-an", inputName + "-end.mp4"]);
+            await ffmpeg.exec(["-i", inputName + ".mp4", "-ss", (end) + "ms", "-to", (endtime) + "ms", "-an", inputName + "-end.mp4"]);
             // concatenatorFile += "file '" + inputName + "-end.mp4'\n";
             await ffmpeg.exec(["-i", inputName + "-end.mp4", "-c", "copy", inputName + "-end.ts"]);
             concatParam += inputName + "-end.ts|";
@@ -583,7 +587,10 @@ async function trimVideo(ffmpeg, inputName, starttime, endtime, videoDuration, a
             await ffmpeg.deleteFile(inputName + "-end.mp4");
             await ffmpeg.deleteFile(inputName + "-end.ts");
         }
-        await ffmpeg.exec(["-i", inputName + ".mp4", "-ss", (starttime / 1000).toFixed(3), "-to", ((endtime - audioOffset) / 1000).toFixed(3), "-q:a", "0", "-map", "a", outputName + ".wav"]);
+
+        console.log("Starttime: " + starttime);
+        console.log("Start: " + start);
+        await ffmpeg.exec(["-i", inputName + ".mp4", "-ss", (starttime) + "ms", "-to", ((endtime - audioOffset)) + "ms", "-q:a", "0", "-map", "a", outputName + ".wav"]);
         // await ffmpeg.deleteFile("concatenatorFile" + inputName + ".txt");
         await ffmpeg.deleteFile(inputName + "-keyframes" + ".txt");
     }
