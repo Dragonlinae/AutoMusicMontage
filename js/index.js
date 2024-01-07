@@ -588,12 +588,10 @@ async function trimVideo(ffmpeg, inputName, starttime, endtime, videoDuration, a
             await ffmpeg.deleteFile(inputName + "-end.ts");
         }
 
-        console.log("Starttime: " + starttime);
-        console.log("Start: " + start);
-        await ffmpeg.exec(["-i", inputName + ".mp4", "-ss", (starttime) + "ms", "-to", ((endtime - audioOffset)) + "ms", "-q:a", "0", "-map", "a", outputName + ".wav"]);
         // await ffmpeg.deleteFile("concatenatorFile" + inputName + ".txt");
         await ffmpeg.deleteFile(inputName + "-keyframes" + ".txt");
     }
+    await ffmpeg.exec(["-i", inputName + ".mp4", "-ss", (starttime) + "ms", "-to", ((endtime - audioOffset)) + "ms", "-q:a", "0", "-map", "a", outputName + ".wav"]);
 }
 
 // return the value of the element that is the same or just below the target
