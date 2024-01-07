@@ -174,7 +174,7 @@ async function generateVideo() {
         ffmpeg.on("log", console.log);
         ffmpeg.on("progress", function (data) {
             console.log(data);
-            document.getElementById("outputVideoTextVerbose").innerHTML = data;
+            document.getElementById("outputVideoTextVerbose").innerHTML = data.progress;
         });
         ffmpeg.on("error", console.log);
 
@@ -182,19 +182,23 @@ async function generateVideo() {
         var starttime = 0;
         // Using outputVideo duration to ensure accuracy and prevent roundoff error from accumulating
         var endtime = peakTimestamps[i + 1] - Math.round(i == 0 ? 0 : document.getElementById("outputVideo").duration * 1000);
+        var audioOffset = i == 0 ? 0 : document.getElementById("outputVideoAudio").duration * 1000 - document.getElementById("outputVideo").duration * 1000;
+        console.log("Audio offset: " + audioOffset);
         var inputName = "video" + i;
         var outputName = "video" + i + "-cut";
         await ffmpeg.writeFile(inputName + ".mp4", await fetchFile(videoFiles[i]));
         var videoDuration = await getVideoDuration(videoFiles[i]);
-        await trimVideo(ffmpeg, inputName, starttime, endtime, videoDuration, outputName);
+        await trimVideo(ffmpeg, inputName, starttime, endtime, videoDuration, audioOffset, outputName);
         // Faster Method
         await ffmpeg.deleteFile(inputName + ".mp4");
 
         // Janky save and retrieve with new ffmpeg instance
         if (i == 0) {
             document.getElementById("outputVideo").src = URL.createObjectURL(new Blob([await ffmpeg.readFile(outputName + ".mp4")], { type: "video/mp4" }));
+            document.getElementById("outputVideoAudio").src = URL.createObjectURL(new Blob([await ffmpeg.readFile(outputName + ".wav")], { type: "audio/wav" }));
             // await ffmpeg.writeFile("output.mp4", await ffmpeg.readFile(outputName + ".mp4"));
             await ffmpeg.deleteFile(outputName + ".mp4");
+            await ffmpeg.deleteFile(outputName + ".wav");
         } else {
             var savedVideo = document.getElementById("outputVideo");
             await ffmpeg.writeFile("output.mp4", await fetchFile(savedVideo.src));
@@ -213,6 +217,16 @@ async function generateVideo() {
             // await ffmpeg.writeFile("output.mp4", await ffmpeg.readFile("output2.mp4"));
             document.getElementById("outputVideo").src = URL.createObjectURL(new Blob([await ffmpeg.readFile("output2.mp4")], { type: "video/mp4" }));
             await ffmpeg.deleteFile("output2.mp4");
+
+            var savedAudio = document.getElementById("outputVideoAudio");
+            await ffmpeg.writeFile("output.wav", await fetchFile(savedAudio.src));
+            // use filter_complex to concatenate audio
+            await ffmpeg.exec(["-i", "output.wav", "-i", outputName + ".wav", "-filter_complex", "[0:a][1:a]concat=n=2:v=0:a=1", "output2.wav"]);
+            // await ffmpeg.exec(["-i", "concat:output.wav|" + outputName + ".wav", "-c", "copy", "output2.mp3"]);
+            document.getElementById("outputVideoAudio").src = URL.createObjectURL(new Blob([await ffmpeg.readFile("output2.wav")], { type: "audio/wav" }));
+            await ffmpeg.deleteFile("output.wav");
+            await ffmpeg.deleteFile("output2.wav");
+            await ffmpeg.deleteFile(outputName + ".wav");
         }
     }
 
@@ -242,14 +256,30 @@ async function generateVideo() {
     var savedVideo = document.getElementById("outputVideo");
     await ffmpeg.writeFile("output.mp4", await fetchFile(savedVideo.src));
     await ffmpeg.writeFile("music.mp3", await fetchFile(document.getElementById("inputMusic").files[0]));
+    await ffmpeg.exec(["-i", "music.mp3", "-ss", "0", "-to", (document.getElementById("outputVideo").duration).toFixed(3), "-c", "copy", "music-cut.mp3"]);
+    var savedAudio = document.getElementById("outputVideoAudio");
+    await ffmpeg.writeFile("output.wav", await fetchFile(savedAudio.src));
+    await ffmpeg.exec(["-i", "output.wav", "-ss", "0", "-to", (document.getElementById("outputVideo").duration).toFixed(3), "-c", "copy", "output2.wav"]);
+    await ffmpeg.deleteFile("output.wav");
+    // Resample music-cut to the same sample rate as output2
+    // var sampleRate = await getAudioSampleRate(new Blob([await ffmpeg.readFile("output2.mp3")], { type: "audio/mp3" }));
+    // await ffmpeg.exec(["-i", "music-cut.mp3", "-ar", sampleRate, "music-cut2.mp3"]);
+    await ffmpeg.exec(["-i", "music-cut.mp3", "-i", "output2.wav", "-filter_complex", "amix=inputs=2:duration=shortest", "output.mp3"]);
     // Replace audio
-    await ffmpeg.exec(["-i", "output.mp4", "-i", "music.mp3", "-map", "0:v", "-map", "1:a", "-c:v", "copy", "-shortest", "output2.mp4"]);
+    await ffmpeg.exec(["-i", "output.mp4", "-i", "output.mp3", "-map", "0:v", "-map", "1:a", "-c:v", "copy", "-shortest", "output2.mp4"]);
     // Combine/Mix audio
     // await ffmpeg.exec(["-i", "output.mp4", "-i", "music.mp3", "-filter_complex", "[0:a][1:a]amerge=inputs=2[a]", "-map", "0:v", "-map", "[a]", "-c:v", "copy", "-ac", "2", "output2.mp4"]);
 
     document.getElementById("outputVideo").src = URL.createObjectURL(new Blob([await ffmpeg.readFile("output2.mp4")], { type: "video/mp4" }));
 
     document.getElementById("outputVideoText").innerHTML = "Video completed";
+
+    // delete audio files
+    await ffmpeg.deleteFile("output.mp3");
+    await ffmpeg.deleteFile("output2.wav");
+    await ffmpeg.deleteFile("music.mp3");
+    await ffmpeg.deleteFile("music-cut.mp3");
+    // await ffmpeg.deleteFile("music-cut2.mp3");
 
     // await ffmpeg.writeFile("video1.mp4", await fetchFile(videoFiles[0]));
     // await ffmpeg.writeFile("video2.mp4", await fetchFile(videoFiles[1]));
@@ -492,7 +522,7 @@ async function graphWaveform(waveform, bandpassWaveform, peaks, truepeaks) {
     }
 }
 
-async function trimVideo(ffmpeg, inputName, starttime, endtime, videoDuration, outputName) {
+async function trimVideo(ffmpeg, inputName, starttime, endtime, videoDuration, audioOffset, outputName) {
     await ffmpeg.exec(["-skip_frame", "nokey", "-i", inputName + ".mp4", "-fps_mode", "passthrough", "-frame_pts", "true", "-r", "1000", "-f", "mkvtimestamp_v2", inputName + "-keyframes" + ".txt"]);
     var text = await ffmpeg.readFile(inputName + "-keyframes" + ".txt");
     var timestamps = new TextDecoder("utf-8").decode(text);
@@ -546,6 +576,7 @@ async function trimVideo(ffmpeg, inputName, starttime, endtime, videoDuration, o
             await ffmpeg.deleteFile(inputName + "-end.mp4");
             await ffmpeg.deleteFile(inputName + "-end.ts");
         }
+        await ffmpeg.exec(["-i", inputName + ".mp4", "-ss", (starttime / 1000).toFixed(3), "-to", ((endtime - audioOffset) / 1000).toFixed(3), "-q:a", "0", "-map", "a", outputName + ".wav"]);
         // await ffmpeg.deleteFile("concatenatorFile" + inputName + ".txt");
         await ffmpeg.deleteFile(inputName + "-keyframes" + ".txt");
     }
@@ -590,6 +621,20 @@ async function getVideoDuration(videoFile) {
         video.onloadedmetadata = function () {
             resolve(Math.round(video.duration * 1000));
         };
+    });
+}
+
+async function getAudioSampleRate(audioFile) {
+    const AudioContext = window.AudioContext || window.webkitAudioContext;
+    const audioContext = new AudioContext();
+    const reader = new FileReader();
+    return new Promise((resolve) => {
+        reader.onload = function (e) {
+            audioContext.decodeAudioData(e.target.result, async function (buffer) {
+                resolve(buffer.sampleRate);
+            });
+        };
+        reader.readAsArrayBuffer(audioFile);
     });
 }
 
