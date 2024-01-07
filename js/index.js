@@ -7,6 +7,7 @@ var threshold = 0.3;
 var beatSeparationLower = 0.1;
 var beatSeparationUpper = 5;
 var beatSignificanceCount = 1000;
+var initialClipOffset = 0;
 const timeslice = 300;
 var isGenerated = false;
 var timePrev = 0;
@@ -115,6 +116,12 @@ function beatSigChange(value) {
     document.getElementById("beatSigSliderInput").value = value;
 }
 
+function initialClipOffsetChange(value) {
+    initialClipOffset = value;
+    document.getElementById("initialClipOffsetSlider").value = value;
+    document.getElementById("initialClipOffsetSliderInput").value = value;
+}
+
 function musicUpload() {
     const file = document.getElementById("inputMusic").files[0];
     document.getElementById("outputMusic").src = URL.createObjectURL(file);
@@ -179,9 +186,9 @@ async function generateVideo() {
         ffmpeg.on("error", console.log);
 
         document.getElementById("outputVideoText").innerHTML = "Working on video " + (i + 1) + "/" + videoFiles.length;
-        var starttime = 0;
+        var starttime = initialClipOffset * 1000;
         // Using outputVideo duration to ensure accuracy and prevent roundoff error from accumulating
-        var endtime = peakTimestamps[i + 1] - Math.round(i == 0 ? 0 : document.getElementById("outputVideo").duration * 1000);
+        var endtime = starttime + peakTimestamps[i + 1] - Math.round(i == 0 ? 0 : document.getElementById("outputVideo").duration * 1000);
         var audioOffset = i == 0 ? 0 : document.getElementById("outputVideoAudio").duration * 1000 - document.getElementById("outputVideo").duration * 1000;
         console.log("Audio offset: " + audioOffset);
         var inputName = "video" + i;
