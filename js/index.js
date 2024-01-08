@@ -263,14 +263,15 @@ async function generateVideo() {
     var savedVideo = document.getElementById("outputVideo");
     await ffmpeg.writeFile("output.mp4", await fetchFile(savedVideo.src));
     await ffmpeg.writeFile("music.mp3", await fetchFile(document.getElementById("inputMusic").files[0]));
-    await ffmpeg.exec(["-i", "music.mp3", "-ss", "0", "-to", (document.getElementById("outputVideo").duration) + "ms", "-c", "copy", "music-cut.mp3"]);
+    await ffmpeg.exec(["-i", "music.mp3", "-ss", "0", "-to", (document.getElementById("outputVideo").duration).toFixed(3), "-c", "copy", "music-cut.mp3"]);
     var savedAudio = document.getElementById("outputVideoAudio");
     await ffmpeg.writeFile("output.wav", await fetchFile(savedAudio.src));
-    await ffmpeg.exec(["-i", "output.wav", "-ss", "0", "-to", (document.getElementById("outputVideo").duration) + "ms", "-c", "copy", "output2.wav"]);
+    await ffmpeg.exec(["-i", "output.wav", "-ss", "0", "-to", (document.getElementById("outputVideo").duration).toFixed(3), "-c", "copy", "output2.wav"]);
     await ffmpeg.deleteFile("output.wav");
     // Resample music-cut to the same sample rate as output2
     // var sampleRate = await getAudioSampleRate(new Blob([await ffmpeg.readFile("output2.mp3")], { type: "audio/mp3" }));
     // await ffmpeg.exec(["-i", "music-cut.mp3", "-ar", sampleRate, "music-cut2.mp3"]);
+    // convert to mp3
     await ffmpeg.exec(["-i", "music-cut.mp3", "-i", "output2.wav", "-filter_complex", "amix=inputs=2:duration=shortest", "output.mp3"]);
     // Replace audio
     await ffmpeg.exec(["-i", "output.mp4", "-i", "output.mp3", "-map", "0:v", "-map", "1:a", "-c:v", "copy", "-shortest", "output2.mp4"]);
