@@ -8,6 +8,7 @@ var beatSeparationLower = 0.1;
 var beatSeparationUpper = 5;
 var beatSignificanceCount = 1000;
 var initialClipOffset = 0;
+var videoTrimMode = "accurate";
 const timeslice = 300;
 var isGenerated = false;
 var timePrev = 0;
@@ -170,6 +171,7 @@ async function generateMusic() {
 }
 
 async function generateVideo() {
+    videoTrimMode = document.querySelector('input[name="videoTrimMode"]:checked').value;
 
     const videoFiles = document.getElementById("inputVideo").files;
 
@@ -547,8 +549,10 @@ async function trimVideo(ffmpeg, inputName, starttime, endtime, videoDuration, a
     var start = upperBound(starttime, timestamps);
 
     // Inaccurate start but faster
-    endtime += start - starttime;
-    starttime = start;
+    if (videoTrimMode == "fast") {
+        endtime += start - starttime;
+        starttime = start;
+    }
 
     var end = lowerBound(endtime, timestamps);
     if (end <= start) {

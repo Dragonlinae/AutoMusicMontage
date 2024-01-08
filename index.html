@@ -84,6 +84,12 @@
                 <div class="sliderLabel">
                     <label for="initialClipOffsetSlider">Initial Clip Offset</label>
                 </div>
+                <div class="radio">
+                    <input type="radio" id="fast" name="videoTrimMode" value="fast" checked>
+                    <label for="fast">Faster Video Generation (Snap to next I-frame)</label>
+                    <input type="radio" id="accurate" name="videoTrimMode" value="accurate">
+                    <label for="accurate">Accurate Video Generation (Do not snap to next I-frame)</label>
+                </div>
             </div>
             <button id="generate" onclick="generateMusic()">Generate Music</button>
             <button id="generate" onclick="generateVideo()">Generate Video</button>
